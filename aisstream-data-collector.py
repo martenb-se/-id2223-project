@@ -147,19 +147,17 @@ async def connect_ais_stream(api_key, skip_message_types=None, timeout=None, ves
 
             # print(vessel_data)
 
-            # If timeout seconds have passed, stop
-            if timeout is not None and (datetime.now(timezone.utc) - start_time).total_seconds() > timeout:
-                raise TimeoutException(f"{timeout} seconds have passed!")
-
             # Add to log
             vessel_data_log.append(vessel_data)
 
-            # Every 30 seconds, print how many messages have been received
+            # TODO: Should be 30 later when not testing
+            # Every 10 seconds, print how many messages have been received
             if (datetime.now(timezone.utc) - log_time).total_seconds() > 10:
                 log_time = datetime.now(timezone.utc)
                 NiceLog.info(f"Received {len(vessel_data_log)} messages")
 
-            # Every 5 minutes, save the log to Hopsworks
+            # TODO: Should be 300 seconds later when not testing
+            # Every 30 seconds, save the log to Hopsworks
             if (datetime.now(timezone.utc) - push_time).total_seconds() > 30:
                 push_time = datetime.now(timezone.utc)
                 NiceLog.info(f"Saving {len(vessel_data_log)} vessel info to Hopsworks...")
@@ -185,6 +183,10 @@ async def connect_ais_stream(api_key, skip_message_types=None, timeout=None, ves
 
                 # # Reset log
                 vessel_data_log = []
+
+            # If timeout seconds have passed, stop
+            if timeout is not None and (datetime.now(timezone.utc) - start_time).total_seconds() > timeout:
+                raise TimeoutException(f"{timeout} seconds have passed!")
 
 def g():
     import hopsworks
@@ -246,7 +248,7 @@ def g():
 
         # For testing:
         # - Run for 60 seconds
-        asyncio.run(asyncio.run(connect_ais_stream(api_key, vessel_fg=vessel_fg, timeout=60)))
+        asyncio.run(asyncio.run(connect_ais_stream(api_key, vessel_fg=vessel_fg, timeout=180)))
 
         # Skip these message types
         # message_type_filter = \

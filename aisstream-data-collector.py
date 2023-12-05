@@ -43,14 +43,6 @@ hopsworks_api_key_modal_secret_name = "hopsworks-api-key"  # Load secret to envi
 # - Feature Groups
 fg_vessel_name = "vessel"
 fg_vessel_version = 1
-# ---- OLD
-fg_wine_name = "wine"
-fg_wine_version = 1
-fg_type_red = "red"
-fg_type_white = "white"
-# - - - Feature Views
-fw_wine_name = "wine"
-fw_wine_version = 1
 
 LOCAL = True
 

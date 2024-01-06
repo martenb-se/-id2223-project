@@ -26,29 +26,53 @@ Before running the data collection script, you need to set up your environment:
      ```
    - Replace `your_aisstream_api_key_here` and `your_hopsworks_api_key_here` with your actual API keys.
 
-## Running the Data Collector
-To run the data collector script locally for testing and development, use the following command:
+## Data Collection
+Data is collected from the [aisstream.io](https://aisstream.io/) API. The data collection script is responsible for
+retrieving data from the API and storing it in a Hopsworks dataset.
 
-```bash
-./modal_aisstream-data-collector.sh --local
-```
-
-This script will later be adapted for remote deployment.
-
-## Model Description
-The machine learning model processes AIS data to identify patterns indicative of bridge opening events, considering 
-vessel type, size, speed, and proximity to the bridge.
-
-## Installation and Dependencies
+### Manually Running the Data Collector
+#### Installation and Dependencies
 Install the required dependencies listed in `requirements.txt` using:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
-Further instructions on using `aisstream-data-collector.py` and the machine learning model, including setup and 
-execution steps, will be provided here.
+#### Running the Data Collector Locally
+To run the data collector script locally for testing and development, use the following command:
+
+```bash
+./launch_aisstream-data-collector.sh --local
+```
+
+#### Running the Data Collector Remotely
+This script will later be adapted for remote deployment.
+
+Initially it was intended to be run on Modal, but due to its limitations on continuous execution, it will be run on 
+Microsoft Azure or Google Cloud instead. It is not yet clear which cloud provider is best for our use case.
+
+### Building and Running the Data Collector Locally using Docker
+To run the data collector script using Docker, use the following command:
+
+```bash
+docker compose up -d --build datacollector
+```
+
+#### Subscribe to logs
+To subscribe to the logs of the data collector container, use the following command:
+```bash
+docker logs -f datacollector
+```
+
+#### Stop container
+To stop the data collector container, use the following command:
+```bash
+docker container stop datacollector
+```
+
+## Model Description
+The machine learning model processes AIS data to identify patterns indicative of bridge opening events, considering 
+vessel type, size, speed, and proximity to the bridge.
 
 ## Contributing
 Contribution guidelines will cover coding standards, pull request processes, and contact information for 

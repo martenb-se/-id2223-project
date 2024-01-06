@@ -2,9 +2,9 @@
 # - Installed hopsworks library with...
 # pip install hopsworks
 # - Get installed library version, and add it to requirements.txt
-# echo "# Hopsworks" >> requirements.txt
-# comm -23 <(pip freeze | sort) <(grep -v "^#" requirements.txt | sort) | grep hopsworks >> requirements.txt
-# echo "# - Dependencies installed by Hopsworks" >> requirements.txt
+# echo "# Geopandas" >> requirements.txt
+# comm -23 <(pip freeze | sort) <(grep -v "^#" requirements.txt | sort) | grep geopandas== >> requirements.txt
+# echo "# - Dependencies installed by geopandas" >> requirements.txt
 # - Get installed library dependencies, and add them to requirements.txt
 # comm -23 <(pip freeze | sort) <(grep -v "^#" requirements.txt | sort) >> requirements.txt
 #
@@ -137,3 +137,79 @@ tzdata==2023.3
 tzlocal==5.2
 urllib3==1.26.18
 wcwidth==0.2.12
+# Jupyter
+jupyter==1.0.0
+# - Dependencies installed by Jupyter
+argon2-cffi==23.1.0
+argon2-cffi-bindings==21.2.0
+arrow==1.3.0
+async-lru==2.0.4
+Babel==2.14.0
+beautifulsoup4==4.12.2
+bleach==6.1.0
+comm==0.2.1
+debugpy==1.8.0
+defusedxml==0.7.1
+fqdn==1.5.1
+ipykernel==6.28.0
+ipywidgets==8.1.1
+isoduration==20.11.0
+json5==0.9.14
+jupyter_client==8.6.0
+jupyter-console==6.6.3
+jupyter-events==0.9.0
+jupyterlab==4.0.10
+jupyterlab_pygments==0.3.0
+jupyterlab_server==2.25.2
+jupyterlab-widgets==3.0.9
+jupyter-lsp==2.2.1
+jupyter_server==2.12.1
+jupyter_server_terminals==0.5.1
+nbclient==0.9.0
+nbconvert==7.14.0
+nest-asyncio==1.5.8
+notebook==7.0.6
+notebook_shim==0.2.3
+overrides==7.4.0
+pandocfilters==1.5.0
+prometheus-client==0.19.0
+psutil==5.9.7
+python-json-logger==2.0.7
+PyYAML==6.0.1
+pyzmq==25.1.2
+qtconsole==5.5.1
+QtPy==2.4.1
+rfc3339-validator==0.1.4
+rfc3986-validator==0.1.1
+Send2Trash==1.8.2
+soupsieve==2.5
+terminado==0.18.0
+tinycss2==1.2.1
+tomli==2.0.1
+tornado==6.4
+types-python-dateutil==2.8.19.14
+uri-template==1.3.0
+webcolors==1.13
+webencodings==0.5.1
+websocket-client==1.7.0
+widgetsnbextension==4.0.9
+# Matplotlib
+matplotlib==3.8.2
+# - Dependencies installed by Matplotlib
+contourpy==1.2.0
+cycler==0.12.1
+fonttools==4.47.0
+kiwisolver==1.4.5
+pillow==10.2.0
+# Seaborn
+seaborn==0.13.1
+# - Dependencies installed by Seaborn
+# None
+# Geopandas
+geopandas==0.14.1
+# - Dependencies installed by geopandas
+click-plugins==1.1.1
+cligj==0.7.2
+fiona==1.9.5
+pyproj==3.6.1
+shapely==2.0.2

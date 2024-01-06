@@ -5,6 +5,13 @@ class HopsworksNoAPIKey(Exception):
     pass
 
 
+class AISStreamNoAPIKey(Exception):
+    """
+    Raised when the API key has not been correctly configures
+    """
+    pass
+
+
 class HopsworksLoginError(Exception):
     """
     Raised when failing to log in to Hopsworks

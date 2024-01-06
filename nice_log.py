@@ -1,4 +1,6 @@
 # https://stackoverflow.com/a/287944
+from datetime import datetime
+
 
 class BGColors:
     HEADER = '\033[95m'
@@ -25,28 +27,37 @@ def __category_filler(category):
 
 
 def info(text):
-    print(f"{BGColors.BOLD}{BGColors.OKCYAN}{__category_filler('INFO')}{BGColors.ENDC} {text}")
+    print(f"{BGColors.BOLD}{BGColors.OKCYAN}{__category_filler('INFO')}{BGColors.ENDC} "
+          f"{BGColors.BOLD}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{BGColors.ENDC} | "
+          f"{text}")
 
 
 def warn(text):
-    print(f"{BGColors.BOLD}{BGColors.WARNING}{__category_filler('WARNING')}{BGColors.ENDC} {text}")
+    print(f"{BGColors.BOLD}{BGColors.WARNING}{__category_filler('WARNING')}{BGColors.ENDC} "
+          f"{BGColors.BOLD}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{BGColors.ENDC} | "
+          f"{text}")
 
 
 def error(text):
-    print(f"{BGColors.BOLD}{BGColors.FAIL}{__category_filler('ERROR')}{BGColors.ENDC} {text}")
+    print(f"{BGColors.BOLD}{BGColors.FAIL}{__category_filler('ERROR')}{BGColors.ENDC} "
+          f"{BGColors.BOLD}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{BGColors.ENDC} | "
+          f"{text}")
 
 
 def ok(text):
-    print(f"{BGColors.BOLD}{BGColors.OKBLUE}{__category_filler('OK')}{BGColors.ENDC} {text}")
+    print(f"{BGColors.BOLD}{BGColors.OKBLUE}{__category_filler('OK')}{BGColors.ENDC} "
+          f"{BGColors.BOLD}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{BGColors.ENDC} | "
+          f"{text}")
 
 
 def success(text):
-    print(f"{BGColors.BOLD}{BGColors.OKGREEN}{__category_filler('SUCCESS')}{BGColors.ENDC} {text}")
+    print(f"{BGColors.BOLD}{BGColors.OKGREEN}{__category_filler('SUCCESS')}{BGColors.ENDC} "
+          f"{BGColors.BOLD}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{BGColors.ENDC} | "
+          f"{text}")
 
 
 if __name__ == "__main__":
     # Testing
-    # print(f"{BGColors.WARNING}Warning: No active frommets remain. Continue?{BGColors.ENDC}")
     header("Welcome to the test program!")
     info("Something is happening...")
     warn("Something is not right...")

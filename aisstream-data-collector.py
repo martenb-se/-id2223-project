@@ -36,13 +36,19 @@ import pandas as pd
 # Settings
 # - Modal
 modal_stub_name = "aisstream-data-collector"
-modal_image_libraries = ["hopsworks"]
+modal_image_libraries = ["hopsworks", "websockets"]
 # - Hopsworks
 hopsworks_api_key_modal_secret_name = "hopsworks-api-key"  # Load secret to environment
+# - AISStream
+aisstream_api_key_modal_secret_name = "aisstream-api-key"  # Load secret to environment
 # Names
 # - Feature Groups
 fg_vessel_name = "vessel"
 fg_vessel_version = 1
+
+# Data
+# - Filter
+filter_only_get_messages_with_type = ["PositionReport"]
 
 LOCAL = True
 
@@ -72,9 +78,12 @@ else:
     NiceLog.info(f"Running {BGColors.HEADER}LOCALLY{BGColors.ENDC} in Python environment.")
 
 
-async def connect_ais_stream(api_key, skip_message_types=None, timeout=None, vessel_fg=None):
+async def connect_ais_stream(api_key, skip_message_types=None, filter_message_type=None, timeout=None, vessel_fg=None):
     if skip_message_types is None:
         skip_message_types = []
+
+    if filter_message_type is None:
+        filter_message_type = []
 
     vessel_data_log = []
 
@@ -95,6 +104,20 @@ async def connect_ais_stream(api_key, skip_message_types=None, timeout=None, ves
         push_time = start_time
         log_time = start_time
 
+        log_every = 60
+        push_every = 600
+        total_logs = 0
+        logs_before_push = push_every / log_every
+        if logs_before_push % 1 != 0:
+            logs_before_push = int(logs_before_push) + 1
+        else:
+            logs_before_push = int(logs_before_push)
+
+        # Log updated and added ships
+        added_ships = {}
+
+        total_updates = 0
+
         async for message_json in websocket:
             # Vessel data
             vessel_data = {
@@ -103,21 +126,34 @@ async def connect_ais_stream(api_key, skip_message_types=None, timeout=None, ves
                 "latitude": None,
                 "longitude": None,
                 "time": None,
-                "dimension": None,
+                # "dimension": None,
+                "dim_a": None,
+                "dim_b": None,
+                "dim_c": None,
+                "dim_d": None,
                 "length": None,
-                "eta": None,
+                "width": None,
+                # "eta": None,
+                "eta_day": None,
+                "eta_hour": None,
+                "eta_minute": None,
+                "eta_month": None,
                 "destination": None,
                 "ship_type": None,
-                "message_type": None
+                "ship_heading": None,
+                "ship_speed": None,
             }
 
             message = json.loads(message_json)
             message_type = message["MessageType"]
 
+            # Use skip or...
             if message_type in skip_message_types:
                 continue
 
-            vessel_data["message_type"] = message_type
+            # ...use filter (either should be used)
+            if len(filter_message_type) > 0 and message_type not in filter_message_type:
+                continue
 
             if "MetaData" in message and \
                     all(key in message['MetaData'] for key in
@@ -130,7 +166,10 @@ async def connect_ais_stream(api_key, skip_message_types=None, timeout=None, ves
 
             if "Message" in message and "ShipStaticData" in message['Message']:
                 if "Eta" in message['Message']['ShipStaticData']:
-                    vessel_data["eta"] = message['Message']['ShipStaticData']['Eta']
+                    vessel_data["eta_day"] = message['Message']['ShipStaticData']['Eta']['Day']
+                    vessel_data["eta_hour"] = message['Message']['ShipStaticData']['Eta']['Hour']
+                    vessel_data["eta_minute"] = message['Message']['ShipStaticData']['Eta']['Minute']
+                    vessel_data["eta_month"] = message['Message']['ShipStaticData']['Eta']['Month']
 
                 if "Destination" in message['Message']['ShipStaticData']:
                     vessel_data["destination"] = message['Message']['ShipStaticData']['Destination']
@@ -138,55 +177,297 @@ async def connect_ais_stream(api_key, skip_message_types=None, timeout=None, ves
                 if "Type" in message['Message']['ShipStaticData']:
                     vessel_data["ship_type"] = message['Message']['ShipStaticData']['Type']
 
+                if "Dimension" in message['Message']['ShipStaticData']:
+                    vessel_data["dim_a"] = message['Message']['ShipStaticData']['Dimension']['A']
+                    vessel_data["dim_b"] = message['Message']['ShipStaticData']['Dimension']['B']
+                    vessel_data["dim_c"] = message['Message']['ShipStaticData']['Dimension']['C']
+                    vessel_data["dim_d"] = message['Message']['ShipStaticData']['Dimension']['D']
+
+                    vessel_data["length"] = \
+                        message['Message']['ShipStaticData']['Dimension']['A'] + \
+                        message['Message']['ShipStaticData']['Dimension']['B']
+
+                    vessel_data["width"] = \
+                        message['Message']['ShipStaticData']['Dimension']['C'] + \
+                        message['Message']['ShipStaticData']['Dimension']['D']
+
             elif "Message" in message and "AidsToNavigationReport" in message['Message']:
-                if "Type" in message['Message']['AidsToNavigationReport']:
-                    vessel_data["dimension"] = message['Message']['AidsToNavigationReport']['Dimension']
+                if "Dimension" in message['Message']['AidsToNavigationReport']:
+                    vessel_data["dim_a"] = message['Message']['AidsToNavigationReport']['Dimension']['A']
+                    vessel_data["dim_b"] = message['Message']['AidsToNavigationReport']['Dimension']['B']
+                    vessel_data["dim_c"] = message['Message']['AidsToNavigationReport']['Dimension']['C']
+                    vessel_data["dim_d"] = message['Message']['AidsToNavigationReport']['Dimension']['D']
+
                     vessel_data["length"] = \
                         message['Message']['AidsToNavigationReport']['Dimension']['A'] + \
                         message['Message']['AidsToNavigationReport']['Dimension']['B']
 
+                    vessel_data["width"] = \
+                        message['Message']['AidsToNavigationReport']['Dimension']['C'] + \
+                        message['Message']['AidsToNavigationReport']['Dimension']['D']
+
+                if "Type" in message['Message']['AidsToNavigationReport']:
+                    vessel_data["ship_type"] = message['Message']['AidsToNavigationReport']['Type']
+
+            elif "Message" in message and "PositionReport" in message['Message']:
+                if "TrueHeading" in message['Message']['PositionReport']:
+                    vessel_data["ship_heading"] = message['Message']['PositionReport']['TrueHeading']
+
+                if "Sog" in message['Message']['PositionReport']:
+                    vessel_data["ship_speed"] = message['Message']['PositionReport']['Sog']
+
+            elif "Message" in message and "StandardClassBPositionReport" in message['Message']:
+                if "TrueHeading" in message['Message']['StandardClassBPositionReport']:
+                    vessel_data["ship_heading"] = message['Message']['StandardClassBPositionReport']['TrueHeading']
+
+                if "Sog" in message['Message']['StandardClassBPositionReport']:
+                    vessel_data["ship_speed"] = message['Message']['StandardClassBPositionReport']['Sog']
+
+            elif "Message" in message and "ExtendedClassBPositionReport" in message['Message']:
+                if "Dimension" in message['Message']['ExtendedClassBPositionReport']:
+                    vessel_data["dim_a"] = message['Message']['ExtendedClassBPositionReport']['Dimension']['A']
+                    vessel_data["dim_b"] = message['Message']['ExtendedClassBPositionReport']['Dimension']['B']
+                    vessel_data["dim_c"] = message['Message']['ExtendedClassBPositionReport']['Dimension']['C']
+                    vessel_data["dim_d"] = message['Message']['ExtendedClassBPositionReport']['Dimension']['D']
+
+                    vessel_data["length"] = \
+                        message['Message']['ExtendedClassBPositionReport']['Dimension']['A'] + \
+                        message['Message']['ExtendedClassBPositionReport']['Dimension']['B']
+
+                    vessel_data["width"] = \
+                        message['Message']['ExtendedClassBPositionReport']['Dimension']['C'] + \
+                        message['Message']['ExtendedClassBPositionReport']['Dimension']['D']
+
+                if "Type" in message['Message']['ExtendedClassBPositionReport']:
+                    vessel_data["ship_type"] = message['Message']['ExtendedClassBPositionReport']['Type']
+
+                if "TrueHeading" in message['Message']['ExtendedClassBPositionReport']:
+                    vessel_data["ship_heading"] = message['Message']['ExtendedClassBPositionReport']['TrueHeading']
+
+            elif "Message" in message and "StaticDataReport" in message['Message']:
+                if "ReportB" in message['Message']['StaticDataReport']:
+                    if "Dimension" in message['Message']['StaticDataReport']["ReportB"]:
+                        vessel_data["dim_a"] = message['Message']['StaticDataReport']["ReportB"]['Dimension']['A']
+                        vessel_data["dim_b"] = message['Message']['StaticDataReport']["ReportB"]['Dimension']['B']
+                        vessel_data["dim_c"] = message['Message']['StaticDataReport']["ReportB"]['Dimension']['C']
+                        vessel_data["dim_d"] = message['Message']['StaticDataReport']["ReportB"]['Dimension']['D']
+
+                        vessel_data["length"] = \
+                            message['Message']['StaticDataReport']["ReportB"]['Dimension']['A'] + \
+                            message['Message']['StaticDataReport']["ReportB"]['Dimension']['B']
+
+                        vessel_data["width"] = \
+                            message['Message']['StaticDataReport']["ReportB"]['Dimension']['C'] + \
+                            message['Message']['StaticDataReport']["ReportB"]['Dimension']['D']
+
+                    if "ShipType" in message['Message']['StaticDataReport']["ReportB"]:
+                        vessel_data["ship_type"] = message['Message']['StaticDataReport']["ReportB"]['ShipType']
+
+            elif "Message" in message and "LongRangeAisBroadcastMessage" in message['Message']:
+                if "ShipType" in message['Message']['LongRangeAisBroadcastMessage']:
+                    vessel_data["ship_type"] = message['Message']['LongRangeAisBroadcastMessage']['ShipType']
+
             # print(vessel_data)
 
-            # Add to log
-            vessel_data_log.append(vessel_data)
+            # See if ship_id is in the log
+            if vessel_data["ship_id"] in [vessel["ship_id"] for vessel in vessel_data_log]:
+                # If it is, update the log
+                for vessel in vessel_data_log:
+                    if vessel["ship_id"] == vessel_data["ship_id"]:
+                        if "message_type_counts" not in vessel:
+                            vessel["message_type_counts"] = {message_type: 1}
+                        elif message_type not in vessel["message_type_counts"]:
+                            vessel["message_type_counts"][message_type] = 1
+                        else:
+                            vessel["message_type_counts"][message_type] += 1
+
+                        # Update where value is not None
+                        for key in vessel_data:
+                            if vessel_data[key] is not None:
+                                # If updated name does not match the old name, print error
+                                if key == "ship_name" and vessel[key] is not None and vessel[key] != vessel_data[key]:
+                                    NiceLog.warn(f"[{vessel['ship_id']}] "
+                                                 f"Ship name has changed from {vessel[key]} to {vessel_data[key]}")
+                                    if vessel_data[key].strip() == "":
+                                        NiceLog.error(f"[{vessel['ship_id']}] "
+                                                      f"Updated ship name is empty, keeping old name: {vessel[key]}")
+                                        continue
+                                    elif "@" in vessel_data[key]:
+                                        NiceLog.error(f"[{vessel['ship_id']}] "
+                                                      f"Updated ship name contains '@', keeping old name: {vessel[key]}")
+                                        continue
+
+                                # If updated ship_type does not match the old ship_type, print error
+                                elif key == "ship_type" and vessel[key] is not None and vessel[key] != vessel_data[key]:
+                                    NiceLog.warn(f"[{vessel['ship_id']}] "
+                                                 f"Ship type has changed from {vessel[key]} to {vessel_data[key]}")
+                                    if vessel[key] != 0 and vessel_data[key] == 0:
+                                        NiceLog.error(f"[{vessel['ship_id']}] "
+                                                      f"Updated ship type is 0, keeping old ship type: {vessel[key]}")
+                                        continue
+
+                                # If updated length or dimensions does not match the old values, print error
+                                elif (key == "length" or key == "dim_a" or key == "dim_b") and \
+                                        vessel["length"] is not None and vessel[key] != vessel_data[key]:
+                                    NiceLog.warn(f"[{vessel['ship_id']}] "
+                                                 f"Ship {key} has changed from {vessel[key]} to {vessel_data[key]}")
+                                    if vessel[key] != 0 and vessel_data[key] == 0:
+                                        NiceLog.error(f"[{vessel['ship_id']}] "
+                                                      f"Updated ship length is 0, "
+                                                      f"keeping old ship {key}: {vessel[key]}")
+                                        continue
+
+                                # If updated width or dimensions does not match the old values, print error
+                                elif (key == "width" or key == "dim_c" or key == "dim_d") and \
+                                        vessel["width"] is not None and vessel[key] != vessel_data[key]:
+                                    NiceLog.warn(f"[{vessel['ship_id']}] "
+                                                 f"Ship {key} has changed from {vessel[key]} to {vessel_data[key]}")
+                                    if vessel[key] != 0 and vessel_data[key] == 0:
+                                        NiceLog.error(f"[{vessel['ship_id']}] "
+                                                      f"Updated ship width is 0, "
+                                                      f"keeping old ship {key}: {vessel[key]}")
+                                        continue
+
+                                vessel[key] = vessel_data[key]
+
+            else:
+                # If it is not, add it to the log
+                vessel_data["message_type_counts"] = {message_type: 1}
+                vessel_data_log.append(vessel_data)
+
+            total_updates += 1
+
+            # Update added ships
+            if vessel_data["ship_id"] in added_ships:
+                added_ships[vessel_data["ship_id"]]["updates"] += 1
+            else:
+                added_ships[vessel_data["ship_id"]] = {
+                    'updates': 1,
+                    'id': vessel_data["ship_id"],
+                    'name': vessel_data["ship_name"]
+                }
+
+            time_now = datetime.now(timezone.utc)
 
             # TODO: Should be 30 later when not testing
-            # Every 10 seconds, print how many messages have been received
-            if (datetime.now(timezone.utc) - log_time).total_seconds() > 10:
-                log_time = datetime.now(timezone.utc)
-                NiceLog.info(f"Received {len(vessel_data_log)} messages")
+            # Print how many messages have been received
+            if (time_now - log_time).total_seconds() >= log_every:
+                log_time = time_now
+                NiceLog.info(
+                    f"Have received {len(vessel_data_log)} unique vessels "
+                    f"(from a total of {total_updates} updates) since {push_time}")
 
-            # TODO: Should be 300 seconds later when not testing
-            # Every 30 seconds, save the log to Hopsworks
-            if (datetime.now(timezone.utc) - push_time).total_seconds() > 30:
-                push_time = datetime.now(timezone.utc)
-                NiceLog.info(f"Saving {len(vessel_data_log)} vessel info to Hopsworks...")
+                most_updates = sorted(added_ships.items(), key=lambda x: x[1]['updates'], reverse=True)
+                NiceLog.info(f"Top 3 ships with most updates:")
+                for i in range(min(3, len(most_updates))):
+                    NiceLog.info(f"    {i+1}. Ship {most_updates[i][1]['id']} "
+                                 f"has {most_updates[i][1]['updates']} updates (name: {most_updates[i][1]['name']})")
 
-                # Print header
-                print(pd.DataFrame(vessel_data_log).head())
+                total_logs += 1
 
-                # Saving is disabled for now
-                # fg_insert_info = vessel_fg.insert(pd.DataFrame(vessel_data_log))
-                # fg_insert_job: feature_group.Job = fg_insert_info[0]
-                # fg_insert_validation_info: ExpectationSuiteValidationResult = fg_insert_info[1]
+                # TODO: Should be 300 seconds later when not testing
+                # Save the log to Hopsworks
+                if total_logs >= logs_before_push:
+                    push_time = time_now
 
-                # # TODO: Use Great Expectations to validate the data in the future
-                # if fg_insert_validation_info is None:
-                #     NiceLog.info(f"Check job {fg_insert_job.name} manually at the provided link.")
-                # else:
-                #     if fg_insert_validation_info.success:
-                #         NiceLog.success("Wine inserted into the feature group.")
-                #     else:
-                #         NiceLog.error("Could not insert wine into group! More info: ")
-                #         pprint(fg_insert_validation_info)
-                #         raise HopsworksFeatureGroupInsertError()
+                    # Print header
+                    # print(pd.DataFrame(vessel_data_log).head())
 
-                # # Reset log
-                vessel_data_log = []
+                    ### # Get ships with most updates
+                    ### vessel_data_log_top = []
+                    ### most_updates = sorted(added_ships.items(), key=lambda x: x[1]['updates'], reverse=True)
+                    ### NiceLog.info(f"Top 10 ships with most updates:")
+                    ### for i in range(min(10, len(most_updates))):
+                    ###     NiceLog.info(f"    {i+1}. Ship {most_updates[i][1]['id']} "
+                    ###                  f"has {most_updates[i][1]['updates']} updates (name: {most_updates[i][1]['name']})")
+                    ###
+                    ###     # Find vessel in vessel_data_log
+                    ###     for vessel in vessel_data_log:
+                    ###         if vessel["ship_id"] == most_updates[i][1]['id']:
+                    ###             vessel_data_log_top.append(vessel)
+                    ###
+                    ### # Print top as a table
+                    ### print(pd.DataFrame(vessel_data_log_top))
+
+                    vessel_df = pd.DataFrame(vessel_data_log)
+
+                    # Filter out vessels with complete information
+                    vessel_df_filter = vessel_df[
+                        vessel_df["ship_id"].notnull() &
+                        # Name is not necessary (but nice to have)
+                        # vessel_df["ship_name"].notnull() &
+                        # (vessel_df["ship_name"] != "") &
+                        vessel_df["length"].notnull() &
+                        vessel_df["width"].notnull() &
+                        (vessel_df["length"] != 0) &
+                        (vessel_df["width"] != 0) &
+                        # It seems that ETA is not always reliable, so ignore it as a necessary field
+                        # vessel_df["eta_day"].notnull() &
+                        # vessel_df["eta_hour"].notnull() &
+                        # vessel_df["eta_minute"].notnull() &
+                        # vessel_df["eta_month"].notnull() &
+                        # ((vessel_df["eta_day"] != 0) | (vessel_df["eta_hour"] != 0) |
+                        #  (vessel_df["eta_minute"] != 0) | (vessel_df["eta_month"] != 0)) &
+                        # Destination is not necessary (but nice to have)
+                        # vessel_df["destination"].notnull() &
+                        # (vessel_df["destination"] != "") &
+                        # Type might be necessary...
+                        vessel_df["ship_type"].notnull() &
+                        (vessel_df["ship_type"] != 0) &
+                        vessel_df["ship_heading"].notnull() &
+                        vessel_df["ship_speed"].notnull()
+                        ]
+
+                    # Print info
+                    NiceLog.info(f"Have {len(vessel_df_filter)} vessels with complete information out of "
+                                 f"{len(vessel_df)} vessels.")
+
+                    # Remove "message_type_counts" column before pushing to Hopsworks
+                    vessel_df_push = vessel_df_filter.drop(columns=["message_type_counts"])
+
+                    # Print first 10 rows
+                    pd.set_option('display.max_rows', 500)
+                    pd.set_option('display.max_columns', 500)
+                    pd.set_option('display.width', 1000)
+                    print(vessel_df_push.head(10))
+
+                    NiceLog.info(f"Saving {len(vessel_df_push)} vessel info to Hopsworks...")
+
+                    # TODO: Temporary fix for saving to CSV
+                    # Save to CSV file if it does not exist
+                    if not os.path.exists("./data/vessel_data.csv"):
+                        vessel_df_push.to_csv("./data/vessel_data.csv", header=True, index=False)
+                    else:
+                        vessel_df_push.to_csv("./data/vessel_data.csv", mode='a', header=False, index=False)
+
+                    # Saving is disabled for now
+                    # fg_insert_info = vessel_fg.insert(pd.DataFrame(vessel_df_filter))
+                    # fg_insert_job: feature_group.Job = fg_insert_info[0]
+                    # fg_insert_validation_info: ExpectationSuiteValidationResult = fg_insert_info[1]
+
+                    # # TODO: Use Great Expectations to validate the data in the future
+                    # if fg_insert_validation_info is None:
+                    #     NiceLog.info(f"Check job {fg_insert_job.name} manually at the provided link.")
+                    # else:
+                    #     if fg_insert_validation_info.success:
+                    #         NiceLog.success("Wine inserted into the feature group.")
+                    #     else:
+                    #         NiceLog.error("Could not insert wine into group! More info: ")
+                    #         pprint(fg_insert_validation_info)
+                    #         raise HopsworksFeatureGroupInsertError()
+
+                    # Reset log
+                    vessel_data_log = []
+                    total_logs = 0
+                    total_updates = 0
+
+                    # Reset added ships
+                    added_ships = {}
 
             # If timeout seconds have passed, stop
             if timeout is not None and (datetime.now(timezone.utc) - start_time).total_seconds() > timeout:
                 raise TimeoutException(f"{timeout} seconds have passed!")
+
 
 def g():
     import hopsworks
@@ -196,6 +477,10 @@ def g():
     if "HOPSWORKS_API_KEY" not in os.environ:
         NiceLog.error(f"Failed to log in to Hopsworks. HOPSWORKS_API_KEY is not in the current environment.")
         raise HopsworksNoAPIKey()
+
+    if "AISSTREAM_API_KEY" not in os.environ:
+        NiceLog.error(f"Failed to log in to Hopsworks. AISSTREAM_API_KEY is not in the current environment.")
+        raise AISStreamNoAPIKey()
 
     # Log in
     NiceLog.info("Logging in to Hopsworks...")
@@ -244,11 +529,14 @@ def g():
     api_key = os.environ["AISSTREAM_API_KEY"]
     try:
         # TODO: This is the actual call when we are ready to run
-        # asyncio.run(asyncio.run(connect_ais_stream(api_key, vessel_fg=vessel_fg)))
+        asyncio.run(asyncio.run(connect_ais_stream(api_key, vessel_fg=vessel_fg)))
 
         # For testing:
         # - Run for 60 seconds
-        asyncio.run(asyncio.run(connect_ais_stream(api_key, vessel_fg=vessel_fg, timeout=180)))
+        # asyncio.run(asyncio.run(connect_ais_stream(
+        #     api_key, vessel_fg=vessel_fg, timeout=None,
+        #     # filter_message_type=filter_only_get_messages_with_type
+        # )))
 
         # Skip these message types
         # message_type_filter = \
@@ -271,7 +559,13 @@ if not LOCAL:
     if sys.argv[1] == "run":
         NiceLog.info(f"But this is just a {BGColors.HEADER}one time{BGColors.ENDC} test.")
 
-    @stub.function(image=image, secret=modal.Secret.from_name(hopsworks_api_key_modal_secret_name))
+    @stub.function(
+        image=image,
+        secrets=[
+            modal.Secret.from_name(hopsworks_api_key_modal_secret_name),
+            modal.Secret.from_name(aisstream_api_key_modal_secret_name),
+        ]
+    )
     def f():
         g()
 

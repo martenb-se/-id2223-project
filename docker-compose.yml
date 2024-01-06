@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  datacollector:
+    container_name: datacollector
+    build:
+      context: .
+      dockerfile: Dockerfile.datacollector
+    volumes:
+      - ./data:/app/data

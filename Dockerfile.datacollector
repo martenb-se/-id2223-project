@@ -1,0 +1,38 @@
+FROM ubuntu:22.04
+
+# Install Python and pip
+RUN apt-get update && apt-get install -y python3.10 python3-pip
+
+# Check where python3 is installed
+# RUN which python3
+# RUN exit 1
+
+# Create a symbolic link for 'python' to point to 'python3'
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+#FROM python:3.10
+WORKDIR /app
+
+# Copy the necessary project files into the container
+COPY aisstream-data-collector.py .
+COPY bash/ bash/
+COPY launch_aisstream-data-collector.sh .
+COPY nice_log.py .
+COPY project_exceptions.py .
+COPY requirements.txt .
+COPY .env .
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Make the script executable
+RUN chmod +x ./launch_aisstream-data-collector.sh
+
+# Set a default terminal type
+ENV TERM xterm
+
+# Clear apt cache
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Set the script as the entrypoint
+ENTRYPOINT ["./modal_aisstream-data-collector.sh", "--local"]

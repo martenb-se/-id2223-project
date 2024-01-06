@@ -27,10 +27,14 @@ source "$SCRIPT_DIR/bash/modal.sh" || { echo "Could not source modal.sh"; exit 1
   if [ "$1" == "--local" ]; then
     python $PYTHON_SCRIPT
   elif [ "$1" == "--remote-run" ]; then
+    echo "Does not support remote run yet."
+    exit 0
+    # TODO: Exchange this for a Microsoft Azure or Google Cloud command
     modal_execute run
   elif [ "$1" == "--remote-deploy" ]; then
     echo "Does not support remote deploy yet."
     exit 0
+    # TODO: Exchange this for a Microsoft Azure or Google Cloud command
     modal_execute deploy
   fi
 )

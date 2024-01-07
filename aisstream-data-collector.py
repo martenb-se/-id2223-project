@@ -435,10 +435,10 @@ async def connect_ais_stream(api_key, skip_message_types=None, filter_message_ty
 
                     # TODO: Temporary fix for saving to CSV
                     # Save to CSV file if it does not exist
-                    if not os.path.exists("./data/vessel_data.csv"):
-                        vessel_df_push.to_csv("./data/vessel_data.csv", header=True, index=False)
+                    if not os.path.exists("./data/vessel_data_tmp.csv"):
+                        vessel_df_push.to_csv("./data/vessel_data_tmp.csv", header=True, index=False)
                     else:
-                        vessel_df_push.to_csv("./data/vessel_data.csv", mode='a', header=False, index=False)
+                        vessel_df_push.to_csv("./data/vessel_data_tmp.csv", mode='a', header=False, index=False)
 
                     # Saving is disabled for now
                     # fg_insert_info = vessel_fg.insert(pd.DataFrame(vessel_df_filter))

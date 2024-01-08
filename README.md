@@ -1,5 +1,8 @@
 # Bridge Opening Prediction Model
 
+Prediction service available at HuggingFace Spaces:
+https://huggingface.co/spaces/GroupSix/bridge
+
 ## Project Overview
 This project is focused on predicting the opening times of the 
 [Södertälje Mälarbro](https://www.sjofartsverket.se/sv/tjanster/kanaler-slussar-broar/sodertalje---malarbron/) 
@@ -7,8 +10,8 @@ in Sweden. It utilizes Automatic Identification System (AIS) data from nearby ve
 This model aims to assist in traffic management and planning for both maritime and vehicular traffic.
 
 ## Data Collection
-The `aisstream-data-collector.py` script is used for collecting AIS data. This data includes vessel locations, speeds, 
-directions, and identification details.
+The `aisstream-data-collector.py` script is used for collecting AIS data continuously.
+This data includes vessel locations, speeds, directions, and identification details.
 
 ## Environment Setup
 Before running the data collection script, you need to set up your environment:
@@ -58,6 +61,32 @@ To run the data collector script using Docker, use the following command:
 docker compose up -d --build datacollector
 ```
 
+## Model Training
+
+## Model Training Pipeline
+The model training pipeline is implemented using the Modal platform. 
+
+### Running the Model Training Pipeline Once Locally
+To run the model training pipeline once locally for testing and development, use the following command:
+
+```bash
+./modal_vessel-training-pipeline.sh --local
+```
+
+### Running the Model Training Pipeline Once Remotely
+To run the model training pipeline once remotely for testing and development, use the following command:
+
+```bash
+./modal_vessel-training-pipeline.sh --remote-run
+```
+
+### Deploy the Model Training Pipeline
+To deploy the model training pipeline, use the following command:
+
+```bash
+./modal_vessel-training-pipeline.sh --remote-deploy
+```
+
 #### Subscribe to logs
 To subscribe to the logs of the data collector container, use the following command:
 ```bash
@@ -73,17 +102,3 @@ docker container stop datacollector
 ## Model Description
 The machine learning model processes AIS data to identify patterns indicative of bridge opening events, considering 
 vessel type, size, speed, and proximity to the bridge.
-
-## Contributing
-Contribution guidelines will cover coding standards, pull request processes, and contact information for 
-project maintainers.
-
-## License
-Details about the project's license and usage rights will be provided here.
-
-## Acknowledgements
-Acknowledgements to contributors, supporting organizations, and institutions.
-
----
-
-*Note: This README is subject to updates as the project evolves.*

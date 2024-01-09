@@ -284,8 +284,12 @@ def g():
     else:
         NiceLog.info(f"Job has finished. Continuing...")
 
-    # TODO: Fix below, return here for now
-    return
+    # Get latest data from Feature Store
+    NiceLog.info(f"Getting latest data from Feature Store...")
+    try:
+       fs_latest_data = vessel_fg.read()
+    except Exception as e:
+       fs_latest_data = pd.DataFrame()
 
     # Get Backfill CSV data from GitHub
     NiceLog.info(f"Getting Backfill CSV data from GitHub...")
@@ -296,29 +300,57 @@ def g():
         raise GitHubGetBackfillCSVError()
 
     NiceLog.success(f"Got Backfill CSV data from GitHub!")
-    # Inspect data head
-    NiceLog.info(f"Backfill CSV data head:")
-    pprint(backfill_csv.head())
-
-    # TODO: Soon...
-    # Get latest data from Feature Store
-    # NiceLog.info(f"Getting latest data from Feature Store...")
-    # try:
-    #    latest_data = vessel_fg.read()
-    # except Exception as e:
-    #    latest_data = pd.DataFrame()
-
-    # Get first 300 rows from Backfill CSV
-    NiceLog.info(f"Getting first 300 rows from Backfill CSV...")
-    backfill_csv = backfill_csv.head(300)
 
     # Drop bad columns
     NiceLog.info(f"Dropping bad columns from Backfill CSV...")
     filtered_backfill_csv = \
         backfill_csv.drop(columns=['ship_name', 'eta_day', 'eta_hour', 'eta_minute', 'eta_month', 'destination'])
 
+    # Get rows that are not in latest data
+    NiceLog.info(f"Getting rows that are not in latest data...")
+    filtered_backfill_csv_new = filtered_backfill_csv
+
+    # Go through all rows in fs_latest_data and print out ship_id and time
+    # for index, row in fs_latest_data.iterrows():
+    #     ship_id = row['ship_id']
+    #     time = row['time']
+    #     # print(index, ship_id, time)
+    #
+    #     # If ship_id and time is in filtered_backfill_csv_new, remove it
+    #     filtered_backfill_csv_new = \
+    #         filtered_backfill_csv_new[~((filtered_backfill_csv_new['ship_id'] == ship_id) &
+    #                                     (filtered_backfill_csv_new['time'] == time))]
+    # Merging with an indicator to find common rows
+    common_rows = fs_latest_data.merge(filtered_backfill_csv_new, on=['ship_id', 'time'], how='inner', indicator=True)
+
+    # Filtering out the common rows from filtered_backfill_csv_new
+    filtered_backfill_csv_new = filtered_backfill_csv_new[~filtered_backfill_csv_new.index.isin(common_rows.index)]
+
+    # Print how many rows are already added from backfill
+    NiceLog.info(f"Number of rows already added from backfill: {len(common_rows.index)}")
+
+    # Print how many more rows there are to add from backfill
+    NiceLog.info(f"Number of rows left to add from backfill: {len(filtered_backfill_csv_new.index)}")
+
+    # If there are no more rows to add, stop
+    if len(filtered_backfill_csv_new.index) == 0:
+        NiceLog.info(f"No more rows to add from backfill. Stopping...")
+        return
+
+    # Print
+    # NiceLog.info(f"Latest data tail:")
+    # pprint(fs_latest_data.tail())
+
+    # Get first 300 rows from Backfill CSV
+    # NiceLog.info(f"Getting first 300 rows from Backfill CSV...")
+    # backfill_csv = filtered_backfill_csv_new.head(300)
+
+    # Inspect data head
+    # NiceLog.info(f"Backfill CSV data head:")
+    # pprint(backfill_csv.head())
+
     # Push data to Feature Store
-    vessel_fg.insert(filtered_backfill_csv)
+    vessel_fg.insert(filtered_backfill_csv_new)
 
 
 # Initialize

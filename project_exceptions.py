@@ -52,3 +52,10 @@ class TimeoutException(Exception):
     Raised when a timeout occurs.
     """
     pass
+
+
+class GitHubGetBackfillCSVError(Exception):
+    """
+    Raised when failing to get a backfill CSV from GitHub
+    """
+    pass

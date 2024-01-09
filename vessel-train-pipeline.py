@@ -29,7 +29,7 @@ import pandas as pd
 
 # Settings
 # - Modal
-modal_stub_name = "aisstream-train-pipeline"
+modal_stub_name = "vessel-train-pipeline"
 modal_image_libraries = ["hopsworks", "joblib"]
 # - Hopsworks
 hopsworks_api_key_modal_secret_name = "hopsworks-api-key"  # Load secret to environment

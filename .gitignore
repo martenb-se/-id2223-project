@@ -6,3 +6,4 @@
 /.sync.sh
 /map/
 /.ipynb_checkpoints/
+*.log

@@ -93,6 +93,8 @@ def get_last_job_info(project: HopsworksProject.Project, fg_name: str) -> dict:
     last_job_status = None
     last_job_success = None
 
+    no_job_matched = True
+
     jobs: HopsworksJobsApi = project.get_jobs_api()
     hw_jobs = jobs.get_jobs()
 
@@ -138,6 +140,8 @@ def get_last_job_info(project: HopsworksProject.Project, fg_name: str) -> dict:
             # Only care about jobs with fg_vessel_name in the name
             if fg_name not in hw_job_name:
                 continue
+            else:
+                no_job_matched = True
 
             # Only care about "materialization" jobs
             if "materialization" not in hw_job_name:
@@ -209,6 +213,12 @@ def get_last_job_info(project: HopsworksProject.Project, fg_name: str) -> dict:
     elif last_job_status == "FINISHED":
         last_job_finished = True
 
+    if no_job_matched:
+        last_job_execution_time = "-"
+        last_job_finished = True
+        last_job_status = "NOT_FOUND"
+        last_job_success = "NOT_STARTED"
+
     return {
         "execution_time": last_job_execution_time,
         "finished": last_job_finished,
@@ -261,7 +271,13 @@ def g():
                  f"(version {fg_vessel_version}) feature group...")
     try:
         vessel_fg: feature_group.FeatureGroup = \
-            fs.get_or_create_feature_group(name=fg_vessel_name, version=fg_vessel_version)
+            fs.get_or_create_feature_group(
+                name=fg_vessel_name,
+                version=fg_vessel_version,
+                primary_key=["ship_id", "time"],
+                description="Vesel dataset"
+            )
+
     except RestAPIError as e:
         NiceLog.error(f"Failed to get feature group from Hopsworks project. Reason: {e}")
         raise HopsworksGetFeatureGroupError()
@@ -295,11 +311,15 @@ def g():
     NiceLog.info(f"Getting Backfill CSV data from GitHub...")
     try:
         backfill_csv = pd.read_csv(github_backfill_csv_url)
+        # Read csv from backfill/vessel_data.csv
+        # backfill_csv = pd.read_csv("backfill/vessel_data.csv")
     except Exception as e:
         NiceLog.error(f"Failed to get Backfill CSV data from GitHub. Reason: {e}")
         raise GitHubGetBackfillCSVError()
 
     NiceLog.success(f"Got Backfill CSV data from GitHub!")
+    # Print number of rows in Backfill CSV
+    NiceLog.info(f"Number of rows in Backfill CSV: {len(backfill_csv.index)}")
 
     # Drop bad columns
     NiceLog.info(f"Dropping bad columns from Backfill CSV...")
@@ -320,11 +340,13 @@ def g():
     #     filtered_backfill_csv_new = \
     #         filtered_backfill_csv_new[~((filtered_backfill_csv_new['ship_id'] == ship_id) &
     #                                     (filtered_backfill_csv_new['time'] == time))]
-    # Merging with an indicator to find common rows
-    common_rows = fs_latest_data.merge(filtered_backfill_csv_new, on=['ship_id', 'time'], how='inner', indicator=True)
-
-    # Filtering out the common rows from filtered_backfill_csv_new
-    filtered_backfill_csv_new = filtered_backfill_csv_new[~filtered_backfill_csv_new.index.isin(common_rows.index)]
+    # Merging with an indicator to find common rows if fs_latest_data is not empty
+    if not fs_latest_data.empty:
+        common_rows = fs_latest_data.merge(filtered_backfill_csv_new, on=['ship_id', 'time'], how='inner', indicator=True)
+        # Filtering out the common rows from filtered_backfill_csv_new
+        filtered_backfill_csv_new = filtered_backfill_csv_new[~filtered_backfill_csv_new.index.isin(common_rows.index)]
+    else:
+        common_rows = pd.DataFrame()
 
     # Print how many rows are already added from backfill
     NiceLog.info(f"Number of rows already added from backfill: {len(common_rows.index)}")
@@ -349,7 +371,10 @@ def g():
     # NiceLog.info(f"Backfill CSV data head:")
     # pprint(backfill_csv.head())
 
-    # Push data to Feature Store
+    # Push 300 rows of data to Feature Store
+    #vessel_fg.insert(filtered_backfill_csv_new.head(300))
+
+    # Push all rows of data to Feature Store
     vessel_fg.insert(filtered_backfill_csv_new)
 
 

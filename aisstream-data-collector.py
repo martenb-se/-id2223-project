@@ -431,30 +431,43 @@ async def connect_ais_stream(api_key, skip_message_types=None, filter_message_ty
                     pd.set_option('display.width', 1000)
                     print(vessel_df_push.head(10))
 
-                    NiceLog.info(f"Saving {len(vessel_df_push)} vessel info to Hopsworks...")
-
-                    # TODO: Temporary fix for saving to CSV
                     # Save to CSV file if it does not exist
+                    NiceLog.info(f"Saving {len(vessel_df_push)} vessel info to CSV file...")
                     if not os.path.exists("./data/vessel_data.csv"):
                         vessel_df_push.to_csv("./data/vessel_data.csv", header=True, index=False)
                     else:
                         vessel_df_push.to_csv("./data/vessel_data.csv", mode='a', header=False, index=False)
 
-                    # Saving is disabled for now
-                    # fg_insert_info = vessel_fg.insert(pd.DataFrame(vessel_df_filter))
-                    # fg_insert_job: feature_group.Job = fg_insert_info[0]
-                    # fg_insert_validation_info: ExpectationSuiteValidationResult = fg_insert_info[1]
+                    try:
+                        NiceLog.info(f"Saving {len(vessel_df_push)} vessel info to Hopsworks...")
+                        fg_insert_info = vessel_fg.insert(
+                            pd.DataFrame(
+                                vessel_df_push.drop(
+                                    columns=[
+                                        'ship_name',
+                                        'eta_day',
+                                        'eta_hour',
+                                        'eta_minute',
+                                        'eta_month',
+                                        'destination'
+                                    ])))
+                        fg_insert_job: feature_group.Job = fg_insert_info[0]
+                        fg_insert_validation_info: ExpectationSuiteValidationResult = fg_insert_info[1]
 
-                    # # TODO: Use Great Expectations to validate the data in the future
-                    # if fg_insert_validation_info is None:
-                    #     NiceLog.info(f"Check job {fg_insert_job.name} manually at the provided link.")
-                    # else:
-                    #     if fg_insert_validation_info.success:
-                    #         NiceLog.success("Wine inserted into the feature group.")
-                    #     else:
-                    #         NiceLog.error("Could not insert wine into group! More info: ")
-                    #         pprint(fg_insert_validation_info)
-                    #         raise HopsworksFeatureGroupInsertError()
+                        # # TODO: Use Great Expectations to validate the data in the future
+                        # if fg_insert_validation_info is None:
+                        #     NiceLog.info(f"Check job {fg_insert_job.name} manually at the provided link.")
+                        # else:
+                        #     if fg_insert_validation_info.success:
+                        #         NiceLog.success("Wine inserted into the feature group.")
+                        #     else:
+                        #         NiceLog.error("Could not insert wine into group! More info: ")
+                        #         pprint(fg_insert_validation_info)
+                        #         raise HopsworksFeatureGroupInsertError()
+                    except Exception as e:
+                        NiceLog.error(f"Failed to insert data into feature group. Reason: {e}")
+                        # Don't raise an error, data is saved in CSV file (it can be added via backfill)
+                        # Hopefully the error from Hopsworks is temporary
 
                     # Reset log
                     vessel_data_log = []
@@ -514,7 +527,12 @@ def g():
                  f"(version {fg_vessel_version}) feature group...")
     try:
         vessel_fg: feature_group.FeatureGroup = \
-            fs.get_or_create_feature_group(name=fg_vessel_name, version=fg_vessel_version)
+            fs.get_or_create_feature_group(
+                name=fg_vessel_name,
+                version=fg_vessel_version,
+                primary_key=["ship_id", "time"],
+                description="Vesel dataset"
+            )
     except RestAPIError as e:
         NiceLog.error(f"Failed to get feature group from Hopsworks project. Reason: {e}")
         raise HopsworksGetFeatureGroupError()

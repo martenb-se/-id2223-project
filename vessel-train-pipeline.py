@@ -45,121 +45,13 @@ models_dir = "models"
 model_bridge_name = "bridge_model"
 model_bridge_version = 1
 # - Feature Groups
-fg_vessel_name = "vessel"
+fg_vessel_name = "vessel_processed"
 fg_vessel_version = 1
 # - Feature Views
-fw_vessel_name = "vessel"
+fw_vessel_name = "vessel_processed"
 fw_vessel_version = 1
 
 LOCAL = True
-
-"""
-Resamples time series data at given intervals (timestep) for each unique vessel,
-filling missing values by backfilling from the previous available data point.
-    
-:param df: DataFrame containing the timestamped vessel data
-:param df: String defining the time step, default '15T' 
-:return: DataFrame containing the resampled data.
-"""
-def resample_and_fill_missing_values(df, time_step='15T'):
-    unique_ships = df['ship_id'].unique()
-    df = df.set_index('time')
-    resampled_data = pd.DataFrame()
-
-    for ship_id in unique_ships:
-        ship_data = df[df['ship_id'] == ship_id]
-        resampled_ship_data = ship_data.resample(time_step).bfill().reset_index()
-        resampled_data = pd.concat([resampled_data, resampled_ship_data], ignore_index=True)
-
-    return resampled_data
-
-import matplotlib.pyplot as plt
-from shapely.geometry import Point, Polygon
-
-def is_within_area(row, area_polygon):
-    boat_location = Point(row['longitude'], row['latitude'])
-    return area_polygon.contains(boat_location)
-
-import pandas as pd
-import numpy as np
-from math import radians, sin, cos, sqrt, atan2
-
-def calculate_angle(boat_lat, boat_long, bridge_lat, bridge_long):
-    delta_longitude = bridge_long - boat_long
-    x = np.cos(np.radians(bridge_lat)) * np.sin(np.radians(delta_longitude))
-    y = np.cos(np.radians(boat_lat)) * np.sin(np.radians(bridge_lat)) - np.sin(np.radians(boat_lat)) * np.cos(
-        np.radians(bridge_lat)) * np.cos(np.radians(delta_longitude))
-    angle = np.degrees(np.arctan2(x, y))
-
-    return angle
-
-def calculate_distance(boat_lat, boat_long, bridge_lat, bridge_long):
-    # Calculate the distance using the Haversine formula https://en.wikipedia.org/wiki/Haversine_formula
-    phi_1 = radians(boat_lat)
-    phi_2 = radians(boat_long)
-
-    delta_phi = radians(bridge_long - boat_long)
-    delta_lambda = radians(bridge_lat - boat_lat)
-
-    a = sin(delta_phi / 2) ** 2 + cos(phi_1) * cos(phi_2) * sin(delta_lambda / 2) ** 2
-    
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-
-    earth_radius = 6371000 # Earth radius in meters
-
-    distance = earth_radius * c
-    
-    return distance
-
-def process_vessels_data(df, time_step='15T'):
-    df = df.copy()
-
-    df['is_moving'] = df['ship_speed'] > 0
-    df['angle_to_bridge'] = calculate_angle(df['latitude'], df['longitude'], 59.19985816310993, 17.628248643747433)
-    df['is_moving_towards_bridge'] = np.abs(df['ship_heading'] - df['angle_to_bridge']) <= 10  # within +/- 10 degrees
-    df['distance_to_bridge_meters'] = df.apply(lambda row: calculate_distance(row['latitude'], row['longitude'], 59.19985816310993, 17.628248643747433), axis=1)
-    df['is_closer_than_1km'] = (df['distance_to_bridge_meters'] < 1000)
-    df['larger_ship_type'] = ((df['ship_type'].between(70, 79)) | (df['ship_type'].between(80, 88)) | (df['ship_type'] == 36))
-
-    # Group by given intervals
-    grouped = df.groupby(pd.Grouper(key='time', freq=time_step))
-    
-    # Aggregate necessary data
-    aggregated_data = grouped.agg({
-        'is_moving': 'sum',
-        'ship_id': 'nunique',
-        'is_moving_towards_bridge': 'sum',
-        'width': 'mean',
-        'length': 'mean',
-        'is_closer_than_1km': 'sum',
-        'larger_ship_type': 'sum'
-    }).reset_index()
-
-    # Rename columns
-    aggregated_data.rename(columns={
-        'ship_id': 'unique_boats_count',
-        'width': 'average_width',
-        'length': 'average_length',
-        'is_moving': 'moving_boats_count',
-        'is_moving_towards_bridge': 'boats_moving_towards_bridge_count',
-        'is_closer_than_1km': 'boats_closer_than_1km',
-        'larger_ship_type': 'larger_ship_count'
-    }, inplace=True)
-    
-    return aggregated_data
-
-def check_bridge_status(row, df):
-        current_time = row['time']
-
-        future_time = current_time + pd.Timedelta(minutes=30)
-
-        open_status = df.loc[
-            (df['time'] >= current_time) & (df['time'] <= future_time) & (df['state'] == 1)
-        ]
-
-        bridge_was_opened = int(len(open_status) > 0)
-    
-        return bridge_was_opened
 
 # Running REMOTELY in Modal's environment
 if "MODAL_ENVIRONMENT" in os.environ:
@@ -241,85 +133,30 @@ def g():
     NiceLog.info(f"Feature group is named: {BGColors.HEADER}{vessel_fg.name}{BGColors.ENDC} "
                  f"({vessel_fg.description})")
 
-    # TODO: Set to correct Feature Group
     # Get Feature View for vessel data
-    # NiceLog.info(f"Getting {BGColors.HEADER}{fw_vessel_name}{BGColors.ENDC} "
-    #              f"(version {fw_vessel_version}) feature view...")
+    NiceLog.info(f"Getting {BGColors.HEADER}{fw_vessel_name}{BGColors.ENDC} "
+                 f"(version {fw_vessel_version}) feature view...")
     try:
         vessel_fw: feature_view.FeatureView = fs.get_feature_view(name=fw_vessel_name, version=fw_vessel_version)
         NiceLog.info(f"Vessel feature fw exists.")
     except Exception as e:
         NiceLog.info(f"Vessel feature fw must be created.")
-        vessel_query: hsfs_query.Query = vessel_fg.select_except(["dim_a", "dim_b", "dim_c", 
-                                                                  "dim_d", "eta_day", "eta_hour", 
-                                                                  "eta_minute", "eta_month", "destination"])
+        vessel_query: hsfs_query.Query = vessel_fg.select_except(features=['time'])
+
+
+        
         vessel_fw: feature_view.FeatureView = (
             fs.get_or_create_feature_view(
                 name=fw_vessel_name,
                 version=fw_vessel_version,
-                description="Read vessel data from AISStream",
-                #labels=["vessel", "aisstream"],
+                description="Read from pre-processed vessel data",
+                labels=["bridge_status"],
                 query=vessel_query))
 
     NiceLog.info(f"Training model...")
-
-    vessel_batch_data: pd.DataFrame = vessel_fw.get_batch_data()
-
-    vessels_timestamp_fix = vessel_batch_data.copy()
-    vessels_timestamp_fix['time'] = pd.to_datetime(vessel_batch_data['time'].str.replace(" UTC", ""), format='%Y-%m-%d %H:%M:%S.%f %z')
-
-    bridge_df = pd.read_json('https://api.sodertalje.se/getAllBridgestat?start=2024-01-03&end=2025-12-31')
-    bridge_df['time'] = pd.to_datetime(bridge_df['formatted_time'])
-
-    # Fix the timezone by converting from GMT+1 to GMT
-    bridge_df['time'] = bridge_df['time'].dt.tz_localize('Etc/GMT+1')
-    bridge_df['time'] = bridge_df['time'].dt.tz_convert('GMT')
-
-    vessels_resampled_df = resample_and_fill_missing_values(vessels_timestamp_fix, '15T')
     
-    # Define the area
-    area_coordinates = [(17.09776409369716, 59.39450752033877), (17.58890720737646, 59.4169265974516), 
-                        (18.413654438791557, 58.977659362589186), (17.28941977865246, 58.70128810203788)]
-    area_polygon = Polygon(area_coordinates)
-
-    # Filter to keep only boats within the area
-    vessels_filtered_df = vessels_resampled_df[vessels_resampled_df.apply(is_within_area, axis=1, area_polygon=area_polygon)]
-
-    vessels_aggregated_df = process_vessels_data(vessels_filtered_df, '15T')
-
-    vessels_aggregated_df['bridge_status'] = vessels_aggregated_df.apply(check_bridge_status, axis=1, df=bridge_df)
-
-    vessels_aggregated_df.set_index('time', inplace=True)
-
-    from sklearn.model_selection import train_test_split
-
-    data = vessels_aggregated_df.copy()
-
-    # Create lag features for selected columns
-    lag = 5  # Number of lag steps
-    lag_cols = ['moving_boats_count', 'unique_boats_count', 'boats_moving_towards_bridge_count', 'average_width', 
-                'average_length', 'boats_closer_than_1km', 'larger_ship_count']
-    for col in lag_cols:
-        for i in range(1, lag + 1):
-            data[f'{col}_lag{i}'] = data[col].shift(i)
-
-    # Prepare target variable (shift 'bridge_status' by -2 timesteps (30 min into the future))
-    data['target'] = data['bridge_status']
-
-    # Drop rows with NaN
-    data.dropna(inplace=True)
-
-    # Define features and target
-    features = [col for col in data.columns if col not in ['bridge_status', 'target']]
-    target = 'target'
-
-    vessel_train_X, vessel_test_X, vessel_train_y, vessel_test_y = train_test_split(data[features], data[target], test_size=0.2)
-
-    # TODO: Enable and edit
     # Train model on vessel data
-    #vessel_train_X, vessel_train_y, vessel_test_X, vessel_test_y = vessel_fw.train_test_split(0.2)
-    #vessel_train_y = vessel_train_y.drop(columns=["ship_type"])
-    #vessel_test_y = vessel_test_y.drop(columns=["ship_type"])
+    vessel_train_X, vessel_test_X, vessel_train_y, vessel_test_y = vessel_fw.train_test_split(0.2)  
 
     model_bridge = XGBClassifier(learning_rate=0.1, max_depth=5, scale_pos_weight=8)
     model_bridge.fit(vessel_train_X, vessel_train_y.values.ravel())
@@ -356,7 +193,8 @@ def g():
     # Create an entry in the model registry that includes the model's name, desc, metrics
     bridge_model = mr.python.create_model(
         name=model_bridge_name,
-        metrics={"accuracy": vessel_metrics['accuracy']},
+        metrics={"accuracy": vessel_metrics['accuracy'],
+                 "f1-score": vessel_metrics['weighted avg']['f1-score']},
         model_schema=bridge_model_schema,
         description="Bridge Status Type Predictor"
     )

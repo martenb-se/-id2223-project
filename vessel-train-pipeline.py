@@ -36,7 +36,8 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 # Settings
 # - Modal
 modal_stub_name = "vessel-train-pipeline"
-modal_image_libraries = ["hopsworks", "joblib"]
+modal_image_libraries = ["hopsworks", "joblib", "seaborn", "scikit-learn==1.1.1", "dataframe-image", "pytz", "xgboost"]
+model_run_every_n_hours = 12
 # - Hopsworks
 hopsworks_api_key_modal_secret_name = "hopsworks-api-key"  # Load secret to environment
 # Names
@@ -143,8 +144,6 @@ def g():
         NiceLog.info(f"Vessel feature fw must be created.")
         vessel_query: hsfs_query.Query = vessel_fg.select_except(features=['time'])
 
-
-        
         vessel_fw: feature_view.FeatureView = (
             fs.get_or_create_feature_view(
                 name=fw_vessel_name,
@@ -156,7 +155,7 @@ def g():
     NiceLog.info(f"Training model...")
     
     # Train model on vessel data
-    vessel_train_X, vessel_test_X, vessel_train_y, vessel_test_y = vessel_fw.train_test_split(0.2)  
+    vessel_train_X, vessel_test_X, vessel_train_y, vessel_test_y = vessel_fw.train_test_split(0.2)
 
     model_bridge = XGBClassifier(learning_rate=0.1, max_depth=5, scale_pos_weight=8)
     model_bridge.fit(vessel_train_X, vessel_train_y.values.ravel())
@@ -213,16 +212,14 @@ if not LOCAL:
                  f"{BGColors.ENDC}")
     image = modal.Image.debian_slim().pip_install(modal_image_libraries)
 
+    NiceLog.info(f"Stub should run every: {BGColors.HEADER}{model_run_every_n_hours}{BGColors.ENDC} hour(s)")
+
     if sys.argv[1] == "run":
         NiceLog.info(f"But this is just a {BGColors.HEADER}one time{BGColors.ENDC} test.")
 
 
-    @stub.function(
-        image=image,
-        secrets=[
-            modal.Secret.from_name(hopsworks_api_key_modal_secret_name),
-        ]
-    )
+    @stub.function(image=image, schedule=modal.Period(hours=model_run_every_n_hours),
+                   secret=modal.Secret.from_name(hopsworks_api_key_modal_secret_name))
     def f():
         g()
 

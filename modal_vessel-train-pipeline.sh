@@ -29,8 +29,6 @@ source "$SCRIPT_DIR/bash/modal.sh" || { echo "Could not source modal.sh"; exit 1
   elif [ "$1" == "--remote-run" ]; then
     modal_execute run
   elif [ "$1" == "--remote-deploy" ]; then
-    echo "Does not support remote deploy yet."
-    exit 0
     modal_execute deploy
   fi
 )

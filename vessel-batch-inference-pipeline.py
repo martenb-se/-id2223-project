@@ -1,5 +1,6 @@
 # Service
-from datetime import timedelta
+import re
+from datetime import timedelta, time
 
 import modal
 
@@ -26,15 +27,14 @@ from hsfs.constructor import query as hsfs_query
 from great_expectations.core.expectation_validation_result import ExpectationSuiteValidationResult
 from hsml import model_registry
 from hsml.python import model as hsml_model
-
 # Error help
 from hopsworks import RestAPIError
 
 # Settings
 # - Modal
-modal_stub_name = "vessel-backfill-pipeline"
-modal_image_libraries = ["hopsworks", "joblib", "seaborn", "scikit-learn==1.1.1", "dataframe-image", "pytz"]
-model_run_every_n_days = 1
+modal_stub_name = "vessel-batch-inference-pipeline"
+modal_image_libraries = ["hopsworks", "joblib", "seaborn", "scikit-learn==1.1.1", "dataframe-image", "pytz", "xgboost"]
+model_run_every_n_hours = 6
 # - Hopsworks
 hopsworks_api_key_modal_secret_name = "hopsworks-api-key"  # Load secret to environment
 # Names
@@ -43,10 +43,10 @@ models_dir = "models"
 model_bridge_name = "bridge_model"
 model_bridge_version = 1
 # - Feature Groups
-fg_vessel_name = "vessel"
+fg_vessel_name = "vessel_processed"
 fg_vessel_version = 1
 # - Feature Views
-fw_vessel_name = "vessel"
+fw_vessel_name = "vessel_processed"
 fw_vessel_version = 1
 # - Monitor
 fg_monitor_name = "bridge_predictions"
@@ -100,6 +100,8 @@ def g():
     import seaborn as sns
     import requests
     import pytz
+    from xgboost import XGBClassifier
+    from sklearn.metrics import accuracy_score, classification_report
 
     def bridge_state_url(cur_bridge_state):
         return ("https://raw.githubusercontent.com/martenb-se/id2223-project/main/images/" +
@@ -153,93 +155,32 @@ def g():
     #
 
     # TODO: Enable me, should be used instead of the fake prediction below
-    # NiceLog.info(f"Getting model named {BGColors.HEADER}{model_bridge_name}{BGColors.ENDC} (version {model_bridge_version})...")
-    # try:
-    #     model_bridge: hsml_model.Model = mr.get_model(model_bridge_name, version=model_bridge_version)
-    # except RestAPIError as e:
-    #     NiceLog.error(f"Failed to get model from Hopsworks model registry. Reason: {e}")
-    #     return
-    # except Exception as e:
-    #     NiceLog.error(f"Unexpected error when trying to get model from Hopsworks model registry. Reason: {e}")
-    #     return
-    # NiceLog.info(
-    #     f"Model description: {BGColors.HEADER}{model_bridge.description}{BGColors.ENDC} "
-    #     f"(training accuracy: {model_bridge.training_metrics['accuracy']})")
-    # 
-    # NiceLog.info(f"Downloading model...")
-    # model_dir = model_bridge.download()
-    # NiceLog.success(f"Model downloaded to: {BGColors.HEADER}{model_dir}{BGColors.ENDC}")
-    # 
-    # bridge_local_model = joblib.load(model_dir + f"/{model_bridge_name}.pkl")
-    # NiceLog.ok(f"Initialized locally downloaded model "
-    #            f"({BGColors.HEADER}{model_dir + '/bridge_model.pkl'}{BGColors.ENDC})")
+    NiceLog.info(f"Getting model named {BGColors.HEADER}{model_bridge_name}{BGColors.ENDC} (version {model_bridge_version})...")
+    try:
+        model_bridge: hsml_model.Model = mr.get_model(model_bridge_name, version=model_bridge_version)
+    except RestAPIError as e:
+        NiceLog.error(f"Failed to get model from Hopsworks model registry. Reason: {e}")
+        return
+    except Exception as e:
+        NiceLog.error(f"Unexpected error when trying to get model from Hopsworks model registry. Reason: {e}")
+        return
+    NiceLog.info(
+        f"Model description: {BGColors.HEADER}{model_bridge.description}{BGColors.ENDC} "
+        f"(training accuracy: {model_bridge.training_metrics['accuracy']})")
 
-    #
-    # ----------------------- VESSEL - FW
-    #
+    NiceLog.info(f"Downloading model...")
+    model_dir = model_bridge.download()
+    NiceLog.success(f"Model downloaded to: {BGColors.HEADER}{model_dir}{BGColors.ENDC}")
 
-    # TODO: Enable me, should be used instead of the Feature Group below
-    # # Get Feature View for vessel data
-    # NiceLog.info(f"Getting {BGColors.HEADER}{fw_vessel_name}{BGColors.ENDC} "
-    #              f"(version {fw_vessel_version}) feature view...")
-    # try:
-    #     vessel_fw: feature_view.FeatureView = fs.get_feature_view(name=fw_vessel_name, version=fw_vessel_version)
-    # except RestAPIError as e:
-    #     NiceLog.error(f"Failed to get feature group from Hopsworks project. Reason: {e}")
-    #     return
-    # except Exception as e:
-    #     NiceLog.error(f"Unexpected error when trying to get feature group from Hopsworks project. Reason: {e}")
-    #     return
-    # NiceLog.info(f"Feature group is named: {BGColors.HEADER}{vessel_fw.name}{BGColors.ENDC} ({vessel_fw.description})")
-    # vessel_batch_data: pd.DataFrame = vessel_fw.get_batch_data()
-    # NiceLog.ok(f"Gotten feature view as a DataFrame.")
-    # pprint(vessel_batch_data.describe())
+    bridge_local_model = joblib.load(model_dir + f"/{model_bridge_name}.pkl")
+    NiceLog.ok(f"Initialized locally downloaded model "
+               f"({BGColors.HEADER}{model_dir + f'/{model_bridge_name}.pkl'}{BGColors.ENDC})")
 
-    #
-    # ----------------------- PROCESS VESSEL DATA
-    # ----------------------- GET CURRENT TIME SPAN
-    #
-
-    # Get current date and time
-    date_time = datetime.now(pytz.utc)
-
-    # TODO: Remove
-    # Set time to 2024-01-05 XX:12:24
-    date_time = datetime(2024, 1, 5, np.random.randint(0, 24), 12, 24, tzinfo=pytz.utc)
-
-    # Adjust the minute to the nearest half-hour mark
-    adjusted_minute = date_time.minute - (date_time.minute % 30)
-    adjusted_date_time = date_time.replace(minute=adjusted_minute, second=0, microsecond=0)
-
-    # Adjust the date to the nearest full hour mark
-    adusted_hour_date_time = date_time.replace(minute=0, second=0, microsecond=0)
-
-    # Adjust the date to the nearest 2 hour mark
-    adjusted_2_hour = date_time.hour - (date_time.hour % 2)
-    adjusted_2_hour_date_time = date_time.replace(hour=adjusted_2_hour, minute=0, second=0, microsecond=0)
-
-    # Adjust the date to the nearest day mark
-    adjusted_day_date_time = date_time.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # Define time spans
-    thirty_minute_span = (adjusted_date_time - timedelta(minutes=30), adjusted_date_time)
-    one_hour_span = (adusted_hour_date_time, adusted_hour_date_time + timedelta(hours=1))
-    two_hour_span = (adjusted_2_hour_date_time, adjusted_2_hour_date_time + timedelta(hours=2))
-    today_span = (adjusted_day_date_time, adjusted_day_date_time + timedelta(days=1))
-
-    # Print time spans
-    NiceLog.info(f"Thirty minute span: {thirty_minute_span[0]} to {thirty_minute_span[1]}")
-    NiceLog.info(f"One hour span: {one_hour_span[0]} to {one_hour_span[1]}")
-    NiceLog.info(f"Two hour span: {two_hour_span[0]} to {two_hour_span[1]}")
-    NiceLog.info(f"Today span: {today_span[0]} to {today_span[1]}")
-
-    # TODO: Enable for one, two or today spans maybe..
 
     #
     # ----------------------- LATEST ADDITION
     #
 
-    # TODO: Should actually use Feature View later (uses the Feature Group now)
     # Get Feature Group
     NiceLog.info(f"Getting {BGColors.HEADER}{fg_vessel_name}{BGColors.ENDC} "
                  f"(version {fg_vessel_version}) feature group...")
@@ -266,99 +207,43 @@ def g():
                       f"Reason: {e}")
         return
     NiceLog.success(f"Gotten feature group as a DataFrame.")
-    # pprint(vessel_df.describe())
-    # pprint(vessel_df.tail())
 
-    # Alter timestamps
-    vessels_timestamp_fix = vessel_df.copy()
-    vessels_timestamp_fix['time'] = pd.to_datetime(vessels_timestamp_fix['time'].str.replace(" UTC", ""),
-                                                   format='%Y-%m-%d %H:%M:%S.%f %z')
+    # Get latest value in vessel_df
+    vessel_df_latest = vessel_df.tail(1)
 
-    # Get entries in vessels_timestamp_fix that are in the last 30 minutes
-    vessels_latest_min_30 = \
-        vessels_timestamp_fix[(vessels_timestamp_fix['time'] > thirty_minute_span[0]) &
-                              (vessels_timestamp_fix['time'] <= thirty_minute_span[1])]
+    # Drop column "bridge_status" and "time" before running inference
+    vessel_batch_data = vessel_df_latest.drop(columns=['bridge_status', 'time'])
 
-    # Print info about timestamps in vessels_latest_min_30
-    NiceLog.info(f"Number of entries in vessels_latest_min_30: {len(vessels_latest_min_30)}")
+    lag_count = 1
 
-    if len(vessels_latest_min_30) > 0:
-        NiceLog.info(f"First entry in vessels_latest_min_30: {vessels_latest_min_30.iloc[0]['time']}")
-        NiceLog.info(f"Last entry in vessels_latest_min_30: {vessels_latest_min_30.iloc[-1]['time']}")
+    # Show all data from vessel_batch_data
+    NiceLog.info(f"All data from vessel_batch_data:")
+    for column in vessel_batch_data:
+        NiceLog.info(f" - {column}: {vessel_batch_data[column].values[0]}")
 
-    else:
-        NiceLog.info(f"No entries in vessels_latest_min_30, there's nothing to run the model on.")
-        return
+        # Find "_lag(\d+)" and get the largest X
+        match = re.search(r'_lag(\d+)', column)
+        if match:
+            lag = int(match.group(1))
+            if lag > lag_count:
+                lag_count = lag
 
-    # Imported from training_pipeline.ipynb
-    def calculate_angle(boat_lat, boat_long, bridge_lat, bridge_long):
-        delta_longitude = bridge_long - boat_long
-        x = np.cos(np.radians(bridge_lat)) * np.sin(np.radians(delta_longitude))
-        y = np.cos(np.radians(boat_lat)) * np.sin(np.radians(bridge_lat)) - np.sin(np.radians(boat_lat)) * np.cos(
-            np.radians(bridge_lat)) * np.cos(np.radians(delta_longitude))
-        angle = np.degrees(np.arctan2(x, y))
-        return angle
-
-    # Modified from training_pipeline.ipynb to aggregate all data to one row
-    def process_vessels_data(df):
-        df = df.copy()
-
-        df['is_moving'] = df['ship_speed'] > 0
-        df['angle_to_bridge'] = calculate_angle(df['latitude'], df['longitude'], 59.19985816310993, 17.628248643747433)
-        df['is_moving_towards_bridge'] = np.abs(
-            df['ship_heading'] - df['angle_to_bridge']) <= 10  # within +/- 10 degrees
-
-        # Aggregate necessary data for the entire DataFrame, and
-        # transpose to turn the aggregated Series into a single-row DataFrame
-        aggregated_data = df.agg({
-            'is_moving': 'sum',
-            'ship_id': 'nunique',
-            'is_moving_towards_bridge': 'sum',
-            'width': 'mean',
-            'length': 'mean'
-        }).to_frame().T
-
-        # Rename columns
-        aggregated_data.rename(columns={
-            'ship_id': 'unique_boats_count',
-            'width': 'average_width',
-            'length': 'average_length',
-            'is_moving': 'moving_boats_count',
-            'is_moving_towards_bridge': 'boats_moving_towards_bridge_count'
-        }, inplace=True)
-
-        return aggregated_data
-
-    # Aggregate all rows in vessels_latest_min_30 to one row
-    aggregated_latest_min_30_data = process_vessels_data(vessels_latest_min_30)
-
-    NiceLog.info(f"Data to be used for input to the model:")
-    NiceLog.info(f" - Moving boats count: {aggregated_latest_min_30_data['moving_boats_count'].values[0]}")
-    NiceLog.info(f" - Unique boats count: {aggregated_latest_min_30_data['unique_boats_count'].values[0]}")
-    NiceLog.info(f" - Boats moving towards bridge count: {aggregated_latest_min_30_data['boats_moving_towards_bridge_count'].values[0]}")
-    NiceLog.info(f" - Average width: {aggregated_latest_min_30_data['average_width'].values[0]}")
-    NiceLog.info(f" - Average length: {aggregated_latest_min_30_data['average_length'].values[0]}")
-
-    # TODO: Add operation to delete all images on Hopsworks because the overwrite=True is buggy...
+    # Print info about lag
+    NiceLog.info(f"Lag count: {lag_count}")
 
     #
     # ----------------------- BRIDGE - PREDICT
     #
 
     # TODO: Enable me
-    # NiceLog.info(f"Predicting bridge opening stored in feature view using model {BGColors.HEADER}{model_bridge_name}{BGColors.ENDC} "
-    #              f"(version {model_bridge_version})...")
-    #
-    # bridge_y_pred = bridge_local_model.predict(vessel_batch_data)
-    # NiceLog.ok("Done")
-    #
-    # offset = 1
-    # bridge_open = bridge_y_pred[bridge_y_pred.size - offset]
+    NiceLog.info(f"Predicting bridge opening stored in feature view using model {BGColors.HEADER}{model_bridge_name}{BGColors.ENDC} "
+                 f"(version {model_bridge_version})...")
 
-    # TODO: Remove me
-    # Perform a random fake prediction between 0 and 1 but with 90% chance of 0
-    import random
-    bridge_open = random.choices([0, 1], weights=[0.9, 0.1], k=1)[0]
+    bridge_y_pred = bridge_local_model.predict(vessel_batch_data)
+    NiceLog.ok("Done")
+
+    offset = 1
+    bridge_open = bridge_y_pred[bridge_y_pred.size - offset]
 
     # Print info about prediction
     NiceLog.info(f"Latest bridge state prediction is: {BGColors.HEADER}{bridge_open}{BGColors.ENDC}")
@@ -388,6 +273,7 @@ def g():
             if trials > 0:
                 NiceLog.error(f"Trying to upload to Hopsworks again...")
                 trials -= 1
+                time.sleep(3)
             else:
                 return
 
@@ -397,55 +283,15 @@ def g():
             if trials > 0:
                 NiceLog.error(f"Trying to upload to Hopsworks again...")
                 trials -= 1
+                time.sleep(3)
             else:
                 return
 
     NiceLog.success(f"Latest bridge state prediction uploaded to Hopsworks")
 
-    #
-    # ----------------------- BRIDGE - ACTUAL
-    #
+    # Save "bridge_status" column
+    bridge_state = vessel_df_latest['bridge_status'].values[0]
 
-    bridge_df = pd.read_json('https://api.sodertalje.se/getAllBridgestat?start=2024-01-03&end=2025-12-31')
-
-    # Get the timezone for Stockholm, Sweden
-    stockholm_tz = pytz.timezone('Europe/Stockholm')
-
-    # Convert 'formatted_time' to datetime objects in Stockholm timezone
-    bridge_df['formatted_time'] = pd.to_datetime(bridge_df['formatted_time']).dt.tz_localize(stockholm_tz)
-
-    # Convert the Stockholm times to UTC
-    bridge_df['time'] = bridge_df['formatted_time'].dt.tz_convert('UTC')
-
-    # Get entries in vessels_timestamp_fix that are in the last 30 minutes
-    bridge_latest_min_30 = \
-        bridge_df[(bridge_df['time'] > thirty_minute_span[0]) &
-                  (bridge_df['time'] <= thirty_minute_span[1])]
-
-    # Print how many entries were in the last 30 minutes
-    NiceLog.info(f"Number of entries in bridge_latest_min_30: {len(bridge_latest_min_30)}")
-
-    bridge_state = 0
-
-    if len(bridge_latest_min_30) > 0:
-        # See if any entry has "state" = 1
-        bridge_open = bridge_latest_min_30[bridge_latest_min_30['state'] == 1]
-
-        # If there are any entries with "state" = 1, the bridge is open
-        if len(bridge_open) > 0:
-            bridge_state = 1
-
-    # If there are no entries in the last 30 minutes, get the latest entry before that
-    elif len(bridge_latest_min_30) == 0:
-        bridge_before_latest_min_30 = bridge_df[(bridge_df['time'] <= thirty_minute_span[1])]
-
-        # Get the entry with the latest time
-        latest_bridge = bridge_before_latest_min_30.iloc[bridge_before_latest_min_30['time'].idxmax()]
-
-        # Get bridge "state"
-        bridge_state = latest_bridge['state']
-
-    # Print info about bridge state (0 = closed, 1 = open)
     NiceLog.info(f"Bridge state: {bridge_state}")
 
     if bridge_state == 1:
@@ -472,6 +318,7 @@ def g():
             if trials > 0:
                 NiceLog.error(f"Trying to upload to Hopsworks again...")
                 trials -= 1
+                time.sleep(3)
             else:
                 return
 
@@ -481,6 +328,7 @@ def g():
             if trials > 0:
                 NiceLog.error(f"Trying to upload to Hopsworks again...")
                 trials -= 1
+                time.sleep(3)
             else:
                 return
 
@@ -490,8 +338,19 @@ def g():
     # ----------------------- MONITOR - INSERT
     #
 
-    time_from = thirty_minute_span[0].strftime("%Y-%m-%d %H:%M:%S.%f %z")
-    time_to = thirty_minute_span[1].strftime("%Y-%m-%d %H:%M:%S.%f %z")
+    # End time of the period
+    time_to = vessel_df_latest['time'].values[0].astype(datetime)
+
+    aggegation_time_frame = 15  # minutes
+
+    # Calculate the total time used for inference
+    total_time_minutes = aggegation_time_frame * lag_count
+
+    # Calculate the start time of the period
+    time_from = time_to - timedelta(minutes=total_time_minutes)
+
+    # Print info about time frame
+    NiceLog.info(f"Time frame: {time_from} to {time_to}")
 
     monitor_fg: feature_group.FeatureGroup = fs.get_or_create_feature_group(
         name=fg_monitor_name,
@@ -505,8 +364,8 @@ def g():
     monitor_data = {
         'prediction': 'open' if bridge_open == 1 else 'closed',
         'outcome': 'open' if bridge_state == 1 else 'closed',
-        'datetime_from': [time_from],
-        'datetime_to': [time_to],
+        'datetime_from': [time_from.strftime("%Y-%m-%d %H:%M:%S.%f %z")],
+        'datetime_to': [time_to.strftime("%Y-%m-%d %H:%M:%S.%f %z")],
     }
     monitor_df = pd.DataFrame(monitor_data)
     NiceLog.ok(f"Created a DataFrame from latest prediction and ground truth.")
@@ -567,6 +426,7 @@ def g():
             if trials > 0:
                 NiceLog.error(f"Trying to upload to Hopsworks again...")
                 trials -= 1
+                time.sleep(3)
             else:
                 return
         except Exception as e:
@@ -575,6 +435,7 @@ def g():
             if trials > 0:
                 NiceLog.error(f"Trying to upload to Hopsworks again...")
                 trials -= 1
+                time.sleep(3)
             else:
                 return
 
@@ -601,13 +462,13 @@ if not LOCAL:
                  f"{BGColors.ENDC}")
     image = modal.Image.debian_slim().pip_install(modal_image_libraries)
 
-    NiceLog.info(f"Stub should run every: {BGColors.HEADER}{model_run_every_n_days}{BGColors.ENDC} day(s)")
+    NiceLog.info(f"Stub should run every: {BGColors.HEADER}{model_run_every_n_hours}{BGColors.ENDC} hour(s)")
 
     if sys.argv[1] == "run":
         NiceLog.info(f"But this is just a {BGColors.HEADER}one time{BGColors.ENDC} test.")
 
 
-    @stub.function(image=image, schedule=modal.Period(days=model_run_every_n_days),
+    @stub.function(image=image, schedule=modal.Period(hours=model_run_every_n_hours),
                    secret=modal.Secret.from_name(hopsworks_api_key_modal_secret_name))
     def f():
         g()

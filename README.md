@@ -61,7 +61,17 @@ To run the data collector script using Docker, use the following command:
 docker compose up -d --build datacollector
 ```
 
-## Model Training
+#### Subscribe to logs
+To subscribe to the logs of the data collector container, use the following command:
+```bash
+docker logs -f datacollector
+```
+
+#### Stop container
+To stop the data collector container, use the following command:
+```bash
+docker container stop datacollector
+```
 
 ## Model Training Pipeline
 The model training pipeline is implemented using the Modal platform. 
@@ -87,16 +97,52 @@ To deploy the model training pipeline, use the following command:
 ./modal_vessel-training-pipeline.sh --remote-deploy
 ```
 
-#### Subscribe to logs
-To subscribe to the logs of the data collector container, use the following command:
+## Model Feature Engineering Pipeline
+The model feature engineering pipeline is implemented using the Modal platform.
+
+### Running the Model Feature Engineering Pipeline Once Locally
+To run the model feature engineering pipeline once locally for testing and development, use the following command:
+
 ```bash
-docker logs -f datacollector
+./modal_vessel-feature-engineering-pipeline.sh --local
 ```
 
-#### Stop container
-To stop the data collector container, use the following command:
+### Running the Model Feature Engineering Pipeline Once Remotely
+To run the model feature engineering pipeline once remotely for testing and development, use the following command:
+
 ```bash
-docker container stop datacollector
+./modal_vessel-feature-engineering-pipeline.sh --remote-run
+```
+
+### Deploy the Model Feature Engineering Pipeline
+To deploy the model feature engineering pipeline, use the following command:
+
+```bash
+./modal_vessel-feature-engineering-pipeline.sh --remote-deploy
+```
+
+## Model Batch Inference Pipeline
+The model batch inference pipeline is implemented using the Modal platform.
+
+### Running the Model Batch Inference Pipeline Once Locally
+To run the model batch inference pipeline once locally for testing and development, use the following command:
+
+```bash
+./modal_vessel-batch-inference-pipeline.sh --local
+```
+
+### Running the Model Batch Inference Pipeline Once Remotely
+To run the model batch inference pipeline once remotely for testing and development, use the following command:
+
+```bash
+./modal_vessel-batch-inference-pipeline.sh --remote-run
+```
+
+### Deploy the Model Batch Inference Pipeline
+To deploy the model batch inference pipeline, use the following command:
+
+```bash
+./modal_vessel-batch-inference-pipeline.sh --remote-deploy
 ```
 
 ## Model Description

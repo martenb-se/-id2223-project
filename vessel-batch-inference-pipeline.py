@@ -208,8 +208,11 @@ def g():
         return
     NiceLog.success(f"Gotten feature group as a DataFrame.")
 
+    # Order vessel_df by time and get the latest row
+    vessel_df = vessel_df.sort_values(by=['time'], ascending=False)
+
     # Get latest value in vessel_df
-    vessel_df_latest = vessel_df.tail(1)
+    vessel_df_latest = vessel_df.head(1)
 
     # Drop column "bridge_status" and "time" before running inference
     vessel_batch_data = vessel_df_latest.drop(columns=['bridge_status', 'time'])
@@ -218,8 +221,8 @@ def g():
 
     # Show all data from vessel_batch_data
     NiceLog.info(f"All data from vessel_batch_data:")
-    for column in vessel_batch_data:
-        NiceLog.info(f" - {column}: {vessel_batch_data[column].values[0]}")
+    for column in vessel_df_latest:
+        NiceLog.info(f" - {column}: {vessel_df_latest[column].values[0]}")
 
         # Find "_lag(\d+)" and get the largest X
         match = re.search(r'_lag(\d+)', column)

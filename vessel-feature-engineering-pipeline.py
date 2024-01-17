@@ -34,8 +34,10 @@ from math import radians, sin, cos, sqrt, atan2
 
 # Settings
 # - Modal
-modal_stub_name = "vessel-train-pipeline"
-modal_image_libraries = ["hopsworks", "joblib"]
+modal_stub_name = "vessel-feature-engineering-pipeline"
+modal_image_libraries = ["hopsworks", "joblib", "seaborn", "scikit-learn==1.1.1", "dataframe-image", "pytz", "xgboost",
+                         "shapely"]
+model_run_every_n_hours = 3
 # - Hopsworks
 hopsworks_api_key_modal_secret_name = "hopsworks-api-key"  # Load secret to environment
 # Names
@@ -52,6 +54,32 @@ bridge_data_start = "2024-01-03"
 bridge_data_end = "2025-12-31"
 
 LOCAL = True
+
+# Running REMOTELY in Modal's environment
+if "MODAL_ENVIRONMENT" in os.environ:
+    NiceLog.info(f"Running in {BGColors.HEADER}REMOTE{BGColors.ENDC} Modal environment")
+    LOCAL = False
+# Running LOCALLY with 'modal run' to deploy to Modal's environment
+elif "/modal" in os.environ["_"]:
+    from dotenv import load_dotenv
+
+    if sys.argv[1] == "run":
+        NiceLog.info(f"Running {BGColors.HEADER}LOCALLY{BGColors.ENDC} using 'modal run' to run stub once in Modal's "
+                     f"remote environment")
+
+    elif sys.argv[1] == "deploy":
+        NiceLog.info(f"Running {BGColors.HEADER}LOCALLY{BGColors.ENDC} using 'modal deploy' to deploy to Modal's "
+                     f"remote environment")
+    else:
+        NiceLog.info(f"Running {BGColors.HEADER}LOCALLY{BGColors.ENDC} using 'modal {sys.argv[1]}'")
+
+    LOCAL = False
+# Running LOCALLY in Python
+else:
+    from dotenv import load_dotenv
+
+    NiceLog.info(f"Running {BGColors.HEADER}LOCALLY{BGColors.ENDC} in Python environment.")
+
 
 """
 Resamples time series data at given intervals (timestep) for each unique vessel,
@@ -154,30 +182,6 @@ def check_bridge_status(row, df):
     
         return bridge_was_opened
 
-# Running REMOTELY in Modal's environment
-if "MODAL_ENVIRONMENT" in os.environ:
-    NiceLog.info(f"Running in {BGColors.HEADER}REMOTE{BGColors.ENDC} Modal environment")
-    LOCAL = False
-# Running LOCALLY with 'modal run' to deploy to Modal's environment
-elif "/modal" in os.environ["_"]:
-    from dotenv import load_dotenv
-
-    if sys.argv[1] == "run":
-        NiceLog.info(f"Running {BGColors.HEADER}LOCALLY{BGColors.ENDC} using 'modal run' to run stub once in Modal's "
-                     f"remote environment")
-
-    elif sys.argv[1] == "deploy":
-        NiceLog.info(f"Running {BGColors.HEADER}LOCALLY{BGColors.ENDC} using 'modal deploy' to deploy to Modal's "
-                     f"remote environment")
-    else:
-        NiceLog.info(f"Running {BGColors.HEADER}LOCALLY{BGColors.ENDC} using 'modal {sys.argv[1]}'")
-
-    LOCAL = False
-# Running LOCALLY in Python
-else:
-    from dotenv import load_dotenv
-
-    NiceLog.info(f"Running {BGColors.HEADER}LOCALLY{BGColors.ENDC} in Python environment.")
 
 
 def g():
@@ -318,16 +322,14 @@ if not LOCAL:
                  f"{BGColors.ENDC}")
     image = modal.Image.debian_slim().pip_install(modal_image_libraries)
 
+    NiceLog.info(f"Stub should run every: {BGColors.HEADER}{model_run_every_n_hours}{BGColors.ENDC} hour(s)")
+
     if sys.argv[1] == "run":
         NiceLog.info(f"But this is just a {BGColors.HEADER}one time{BGColors.ENDC} test.")
 
 
-    @stub.function(
-        image=image,
-        secrets=[
-            modal.Secret.from_name(hopsworks_api_key_modal_secret_name),
-        ]
-    )
+    @stub.function(image=image, schedule=modal.Period(hours=model_run_every_n_hours),
+                   secret=modal.Secret.from_name(hopsworks_api_key_modal_secret_name))
     def f():
         g()
 

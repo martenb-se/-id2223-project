@@ -213,3 +213,5 @@ cligj==0.7.2
 fiona==1.9.5
 pyproj==3.6.1
 shapely==2.0.2
+# Huggingface
+huggingface-hub

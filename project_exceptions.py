@@ -1,13 +1,20 @@
 class HopsworksNoAPIKey(Exception):
     """
-    Raised when the API key has not been correctly configures
+    Raised when the API key has not been correctly configured
     """
     pass
 
 
 class AISStreamNoAPIKey(Exception):
     """
-    Raised when the API key has not been correctly configures
+    Raised when the API key has not been correctly configured
+    """
+    pass
+
+
+class HuggingfaceNoAccessToken(Exception):
+    """
+    Raised when the access token has not been correctly configured
     """
     pass
 
@@ -15,6 +22,13 @@ class AISStreamNoAPIKey(Exception):
 class HopsworksLoginError(Exception):
     """
     Raised when failing to log in to Hopsworks
+    """
+    pass
+
+
+class HuggingfaceLoginError(Exception):
+    """
+    Raised when failing to log in to Huggingface
     """
     pass
 
@@ -43,6 +57,13 @@ class HopsworksQueryReadError(Exception):
 class HopsworksFeatureGroupInsertError(Exception):
     """
     Raised when failing to insert an entry into a Feature Group on Hopsworks
+    """
+    pass
+
+
+class HuggingfaceGetSpaceInfoError(Exception):
+    """
+    Raised when failing to get space info from Huggingface
     """
     pass
 

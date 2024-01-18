@@ -48,6 +48,8 @@ Before running the data collection script, you need to set up your environment:
 1. **API Keys**: 
    - **aisstream.io API Key**: You need an API key from aisstream.io to access AIS data. 
    - **Hopsworks API Key**: To store the collected data, you will need an API key from Hopsworks.
+   - **Hugging Face Access Token**: To restart the Hugging Face Space via their API, you will need an access token from 
+     Hugging Face.
 
 2. **.env File**: 
    - Create a `.env` file in the project root directory.
@@ -55,8 +57,10 @@ Before running the data collection script, you need to set up your environment:
      ```
      AISSTREAM_API_KEY=your_aisstream_api_key_here
      HOPSWORKS_API_KEY=your_hopsworks_api_key_here
+     HUGGINGFACE_ACCESS_TOKEN=your_huggingface_access_token_here
      ```
-   - Replace `your_aisstream_api_key_here` and `your_hopsworks_api_key_here` with your actual API keys.
+   - Replace `your_aisstream_api_key_here`, `your_hopsworks_api_key_here`, and 
+     `your_huggingface_access_token_here` with your actual API keys.
 
 ### Manually Running the Data Collector
 #### Installation and Dependencies

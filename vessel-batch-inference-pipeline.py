@@ -341,19 +341,25 @@ def g():
     # ----------------------- MONITOR - INSERT
     #
 
-    # End time of the period
-    time_to = vessel_df_latest['time'].values[0].astype(datetime)
+    # Lag time
+    time_now = vessel_df_latest['time'].values[0].astype(datetime)
 
+    # Lag times
+    # - End time of the period
+    lag_time_to = time_now
     aggegation_time_frame = 15  # minutes
-
-    # Calculate the total time used for inference
+    # - Calculate the total time used for inference
     total_time_minutes = aggegation_time_frame * lag_count
+    # - Calculate the start time of the period
+    lag_time_from = lag_time_to - timedelta(minutes=total_time_minutes)
 
-    # Calculate the start time of the period
-    time_from = time_to - timedelta(minutes=total_time_minutes)
+    # Inference times
+    time_from = time_now
+    time_to = time_from + timedelta(minutes=30)
 
     # Print info about time frame
-    NiceLog.info(f"Time frame: {time_from} to {time_to}")
+    NiceLog.info(f"History frame: {lag_time_from} to {lag_time_to}")
+    NiceLog.info(f"Inference frame: {time_from} to {time_to}")
 
     monitor_fg: feature_group.FeatureGroup = fs.get_or_create_feature_group(
         name=fg_monitor_name,

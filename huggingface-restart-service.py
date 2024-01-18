@@ -139,6 +139,7 @@ if not LOCAL:
 
     @stub.function(
         image=image,
+        schedule=modal.Period(hours=model_run_every_n_hours),
         secrets=[
             modal.Secret.from_name(huggingface_access_token_modal_secret_name),
         ]

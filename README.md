@@ -3,6 +3,34 @@
 Prediction service available at HuggingFace Spaces:
 https://huggingface.co/spaces/GroupSix/bridge
 
+## Table of Contents
+- [Project Overview](#project-overview)
+- [Data Collection](#data-collection)
+- [Environment Setup](#environment-setup)
+  * [Manually Running the Data Collector](#manually-running-the-data-collector)
+    + [Installation and Dependencies](#installation-and-dependencies)
+    + [Running the Data Collector Locally](#running-the-data-collector-locally)
+    + [Running the Data Collector Remotely](#running-the-data-collector-remotely)
+  * [Building and Running the Data Collector Locally using Docker](#building-and-running-the-data-collector-locally-using-docker)
+    + [Subscribe to logs](#subscribe-to-logs)
+    + [Stop container](#stop-container)
++ [Model Training Pipeline](#model-training-pipeline)
+  * [Running the Model Training Pipeline Once Locally](#running-the-model-training-pipeline-once-locally)
+  * [Running the Model Training Pipeline Once Remotely](#running-the-model-training-pipeline-once-remotely)
+  * [Deploy the Model Training Pipeline](#deploy-the-model-training-pipeline)
++ [Model Feature Engineering Pipeline](#model-feature-engineering-pipeline)
+  * [Running the Model Feature Engineering Pipeline Once Locally](#running-the-model-feature-engineering-pipeline-once-locally)
+  * [Running the Model Feature Engineering Pipeline Once Remotely](#running-the-model-feature-engineering-pipeline-once-remotely)
+  * [Deploy the Model Feature Engineering Pipeline](#deploy-the-model-feature-engineering-pipeline)
++ [Model Batch Inference Pipeline](#model-batch-inference-pipeline)
+  * [Running the Model Batch Inference Pipeline Once Locally](#running-the-model-batch-inference-pipeline-once-locally)
+  * [Running the Model Batch Inference Pipeline Once Remotely](#running-the-model-batch-inference-pipeline-once-remotely)
+  * [Deploy the Model Batch Inference Pipeline](#deploy-the-model-batch-inference-pipeline)
++ [Hugging Face Spaces Restart Service](#hugging-face-spaces-restart-service)
+  * [Restart Service Once Locally](#restart-service-once-locally)
+  * [Restart Service Once Remotely](#restart-service-once-remotely)
+  * [Restart Service Continuously Remotely](#restart-service-continuously-remotely)
+
 ## Project Overview
 This project is focused on predicting the opening times of the 
 [Södertälje Mälarbro](https://www.sjofartsverket.se/sv/tjanster/kanaler-slussar-broar/sodertalje---malarbron/) 
@@ -10,8 +38,9 @@ in Sweden. It utilizes Automatic Identification System (AIS) data from nearby ve
 This model aims to assist in traffic management and planning for both maritime and vehicular traffic.
 
 ## Data Collection
-The `aisstream-data-collector.py` script is used for collecting AIS data continuously.
-This data includes vessel locations, speeds, directions, and identification details.
+Data is collected from the [aisstream.io](https://aisstream.io/) API. The `aisstream-data-collector.py` script is used 
+for collecting AIS data continuously and storing it in a Hopsworks Feature Group. This data includes vessel locations, 
+speeds, directions, and identification details.
 
 ## Environment Setup
 Before running the data collection script, you need to set up your environment:
@@ -28,10 +57,6 @@ Before running the data collection script, you need to set up your environment:
      HOPSWORKS_API_KEY=your_hopsworks_api_key_here
      ```
    - Replace `your_aisstream_api_key_here` and `your_hopsworks_api_key_here` with your actual API keys.
-
-## Data Collection
-Data is collected from the [aisstream.io](https://aisstream.io/) API. The data collection script is responsible for
-retrieving data from the API and storing it in a Hopsworks dataset.
 
 ### Manually Running the Data Collector
 #### Installation and Dependencies
@@ -144,6 +169,30 @@ To deploy the model batch inference pipeline, use the following command:
 ```bash
 ./modal_vessel-batch-inference-pipeline.sh --remote-deploy
 ```
+
+## Hugging Face Spaces Restart Service
+### Restart Service Once Locally
+Since the Hugging Face Spaces are static once deployed, you need to restart the service to update the space with the
+latest inference results. To restart the service once locally, use the following command:
+
+```bash
+./modal_huggingface-restart-service.sh --local
+```
+
+### Restart Service Once Remotely
+To restart the service once remotely via Modal, use the following command:
+
+```bash
+./modal_huggingface-restart-service.sh --remote-run
+```
+
+### Restart Service Continuously Remotely
+To restart the service continuously remotely via Modal, use the following command:
+
+```bash
+./modal_huggingface-restart-service.sh --remote-deploy
+```
+
 
 ## Model Description
 The machine learning model processes AIS data to identify patterns indicative of bridge opening events, considering 
